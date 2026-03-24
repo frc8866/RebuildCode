@@ -1,0 +1,363 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
+package frc.robot;
+
+import static edu.wpi.first.units.Units.Amps;
+import static edu.wpi.first.units.Units.Degrees;
+import static edu.wpi.first.units.Units.DegreesPerSecond;
+import static edu.wpi.first.units.Units.Hertz;
+import static edu.wpi.first.units.Units.Inches;
+import static edu.wpi.first.units.Units.KilogramSquareMeters;
+import static edu.wpi.first.units.Units.MetersPerSecond;
+import static edu.wpi.first.units.Units.MetersPerSecondPerSecond;
+import static edu.wpi.first.units.Units.RadiansPerSecond;
+import static edu.wpi.first.units.Units.RadiansPerSecondPerSecond;
+import static edu.wpi.first.units.Units.Rotations;
+import static edu.wpi.first.units.Units.RotationsPerSecond;
+import static edu.wpi.first.units.Units.Second;
+import static edu.wpi.first.units.Units.Seconds;
+import static edu.wpi.first.units.Units.Volts;
+
+import java.util.function.Supplier;
+
+import com.ctre.phoenix6.CANBus;
+import com.ctre.phoenix6.configs.CANcoderConfiguration;
+import com.ctre.phoenix6.configs.CurrentLimitsConfigs;
+import com.ctre.phoenix6.configs.MotionMagicConfigs;
+import com.ctre.phoenix6.configs.MotorOutputConfigs;
+import com.ctre.phoenix6.configs.MountPoseConfigs;
+import com.ctre.phoenix6.configs.Pigeon2Configuration;
+import com.ctre.phoenix6.configs.Slot0Configs;
+import com.ctre.phoenix6.configs.TalonFXConfiguration;
+
+import com.ctre.phoenix6.signals.NeutralModeValue;
+import com.ctre.phoenix6.signals.StaticFeedforwardSignValue;
+import com.ctre.phoenix6.swerve.SwerveDrivetrainConstants;
+import com.ctre.phoenix6.swerve.SwerveModuleConstants;
+import com.ctre.phoenix6.swerve.SwerveModuleConstants.ClosedLoopOutputType;
+import com.ctre.phoenix6.swerve.SwerveModuleConstants.DriveMotorArrangement;
+import com.ctre.phoenix6.swerve.SwerveModuleConstants.SteerFeedbackType;
+import com.ctre.phoenix6.swerve.SwerveModuleConstants.SteerMotorArrangement;
+import com.ctre.phoenix6.swerve.SwerveModuleConstantsFactory;
+import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
+import com.ctre.phoenix6.swerve.SwerveModule.SteerRequestType;
+
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
+import edu.wpi.first.apriltag.AprilTagFields;
+import edu.wpi.first.math.Matrix;
+import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.geometry.Rotation3d;
+import edu.wpi.first.math.geometry.Transform3d;
+import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.geometry.Translation3d;
+import edu.wpi.first.math.numbers.N1;
+import edu.wpi.first.math.numbers.N3;
+import edu.wpi.first.units.VoltageUnit;
+import edu.wpi.first.units.measure.Angle;
+import edu.wpi.first.units.measure.AngularAcceleration;
+import edu.wpi.first.units.measure.AngularVelocity;
+import edu.wpi.first.units.measure.Current;
+import edu.wpi.first.units.measure.Distance;
+import edu.wpi.first.units.measure.Frequency;
+import edu.wpi.first.units.measure.LinearAcceleration;
+import edu.wpi.first.units.measure.LinearVelocity;
+import edu.wpi.first.units.measure.MomentOfInertia;
+import edu.wpi.first.units.measure.Time;
+import edu.wpi.first.units.measure.Velocity;
+import edu.wpi.first.units.measure.Voltage;
+import edu.wpi.first.wpilibj.RobotBase;
+
+public final class Constants {
+  public enum Mode {
+    REAL,
+    SIM,
+    REPLAY
+  }
+      public static final CANBus CAN_RIO_BUS = new CANBus("rio");
+
+
+  public static final Mode currentMode =
+      RobotBase.isReal()
+          ? Mode.REAL
+          : (Boolean.getBoolean("ak.replay") ? Mode.REPLAY : Mode.SIM);
+
+             public static class FieldConstants {
+        public static final Distance FIELD_LENGTH = Inches.of(650.12);
+        public static final Distance FIELD_WIDTH = Inches.of(316.64);
+
+        public static final Distance ALLIANCE_ZONE = Inches.of(156.06);
+
+        public static final Translation3d HUB_BLUE =
+                new Translation3d(Inches.of(181.56), FIELD_WIDTH.div(2), Inches.of(56.4));
+        public static final Translation3d HUB_RED =
+                new Translation3d(FIELD_LENGTH.minus(Inches.of(181.56)), FIELD_WIDTH.div(2), Inches.of(56.4));
+        public static final Translation2d Bluefunnel = new Translation2d(1.277,0.620);
+                public static final Translation2d Redfunnel = new Translation2d(1.277,0.620);
+
+        public static final Distance FUNNEL_RADIUS = Inches.of(24);
+        public static final Distance FUNNEL_HEIGHT = Inches.of(72 - 56.4);
+    }
+
+
+    
+    public static class SwerveConstants {
+        public static final LinearVelocity DEFAULT_DRIVE_SPEED = MetersPerSecond.of(5);
+        public static final AngularVelocity DEFAULT_ROT_SPEED = RotationsPerSecond.of(2);
+
+        public static final LinearVelocity FAST_DRIVE_SPEED = MetersPerSecond.of(4.5);
+        public static final AngularVelocity FAST_ROT_SPEED = RotationsPerSecond.of(2);
+
+        public static final LinearAcceleration MAX_TELEOP_ACCEL = MetersPerSecondPerSecond.of(15);
+
+        public static final AngularVelocity MAX_MODULE_ROT_SPEED = RotationsPerSecond.of(5);
+
+        private static final Distance MODULE_DISTANCE_Y = Inches.of(23); // left to right
+        private static final Distance MODULE_DISTANCE_X = Inches.of(21); // front to back
+
+        private static final Slot0Configs STEER_GAINS = new Slot0Configs()
+                .withKP(20)
+                .withKI(1)
+                .withKD(0.1)
+                .withKS(0.1)
+                .withKV(2.37)
+                .withKA(0.0)
+                .withStaticFeedforwardSign(StaticFeedforwardSignValue.UseClosedLoopSign);
+
+        private static final Slot0Configs DRIVE_GAINS = new Slot0Configs()
+                .withKP(1.3)
+                .withKI(0.01)
+                .withKD(0.0)
+                .withKS(0.879) // 0.11367, 0.1301, 0.15349, 0.16187 -> 0.140
+                .withKV(0.854) // 0.13879, 0.13555, 0.13894, 0.13109 -> 0.136
+                .withKA(0.05); // 0.016363, 0.016268, 0.0085342, 0.011084 -> 0.013
+
+        private static final ClosedLoopOutputType STEER_CLOSED_LOOP_OUTPUT = ClosedLoopOutputType.Voltage;
+        private static final ClosedLoopOutputType DRIVE_CLOSED_LOOP_OUTPUT = ClosedLoopOutputType.Voltage;
+
+        private static final DriveMotorArrangement DRIVE_MOTOR_TYPE = DriveMotorArrangement.TalonFX_Integrated;
+        private static final SteerMotorArrangement STEER_MOTOR_TYPE = SteerMotorArrangement.TalonFX_Integrated;
+
+        private static final SteerFeedbackType STEER_FEEDBACK_TYPE = SteerFeedbackType.FusedCANcoder;
+
+        private static final Current SLIP_CURRENT = Amps.of(80.0); // NEEDS TUNING
+
+        private static final TalonFXConfiguration DRIVE_CONFIGS = new TalonFXConfiguration()
+                .withCurrentLimits(new CurrentLimitsConfigs()
+                        .withStatorCurrentLimit(Amps.of(120))
+                        .withStatorCurrentLimitEnable(true))
+                .withMotorOutput(new MotorOutputConfigs().withNeutralMode(NeutralModeValue.Brake));
+
+        private static final TalonFXConfiguration STEER_CONFIGS = new TalonFXConfiguration()
+                .withCurrentLimits(new CurrentLimitsConfigs()
+                        .withStatorCurrentLimit(Amps.of(60))
+                        .withStatorCurrentLimitEnable(true))
+                .withMotorOutput(new MotorOutputConfigs().withNeutralMode(NeutralModeValue.Brake))
+                .withMotionMagic(
+                        new MotionMagicConfigs().withMotionMagicExpo_kA(0.5).withMotionMagicExpo_kV(2.0));
+
+        private static final CANcoderConfiguration ENCODER_CONFIGS = new CANcoderConfiguration();
+
+        public static final Pigeon2Configuration PIGEON_CONFIGS =
+                new Pigeon2Configuration().withMountPose(new MountPoseConfigs().withMountPoseRoll(Degrees.of(180)));
+
+        public static final LinearVelocity SPEED_AT_12V = MetersPerSecond.of(4.1); // maybe needs tuning
+
+        // Every 1 rotation of the azimuth results in kCoupleRatio drive motor turns;
+        private static final double COUPLE_RATIO = 4.58;
+
+        private static final double DRIVE_GEAR_RATIO = 7.03; // 7.03:1
+        private static final double STEER_GEAR_RATIO = 287.0 / 11; // 287:11
+        private static final Distance WHEEL_RADIUS = Inches.of(1.985);
+
+        public static final int PIGEON_ID = 1;
+
+        // SIMULATION inertia
+        private static final MomentOfInertia STEER_INERTIA = KilogramSquareMeters.of(0.01);
+        private static final MomentOfInertia DRIVE_INERTIA = KilogramSquareMeters.of(0.01);
+        // SIMULATION voltage necessary to overcome friction
+        private static final Voltage STEER_FRICTION_VOLTAGE = Volts.of(0.2);
+        private static final Voltage DRIVE_FRICTION_VOLTAGE = Volts.of(0.2);
+
+        public static final SwerveDrivetrainConstants DRIVETRAIN_CONSTANTS = new SwerveDrivetrainConstants()
+                .withCANBusName(CAN_RIO_BUS.getName())
+                .withPigeon2Id(PIGEON_ID)
+                .withPigeon2Configs(PIGEON_CONFIGS);
+
+        private static final SwerveModuleConstantsFactory<
+                        TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
+                CONSTANT_CREATOR = new SwerveModuleConstantsFactory<
+                                TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>()
+                        .withDriveMotorGearRatio(DRIVE_GEAR_RATIO)
+                        .withSteerMotorGearRatio(STEER_GEAR_RATIO)
+                        .withCouplingGearRatio(COUPLE_RATIO)
+                        .withWheelRadius(WHEEL_RADIUS)
+                        .withSteerMotorGains(STEER_GAINS)
+                        .withDriveMotorGains(DRIVE_GAINS)
+                        .withSteerMotorClosedLoopOutput(STEER_CLOSED_LOOP_OUTPUT)
+                        .withDriveMotorClosedLoopOutput(DRIVE_CLOSED_LOOP_OUTPUT)
+                        .withSlipCurrent(SLIP_CURRENT)
+                        .withSpeedAt12Volts(SPEED_AT_12V)
+                        .withDriveMotorType(DRIVE_MOTOR_TYPE)
+                        .withSteerMotorType(STEER_MOTOR_TYPE)
+                        .withFeedbackSource(STEER_FEEDBACK_TYPE)
+                        .withDriveMotorInitialConfigs(DRIVE_CONFIGS)
+                        .withSteerMotorInitialConfigs(STEER_CONFIGS)
+                        .withEncoderInitialConfigs(ENCODER_CONFIGS)
+                        .withSteerInertia(STEER_INERTIA)
+                        .withDriveInertia(DRIVE_INERTIA)
+                        .withSteerFrictionVoltage(STEER_FRICTION_VOLTAGE)
+                        .withDriveFrictionVoltage(DRIVE_FRICTION_VOLTAGE);
+
+        public static class FrontLeft {
+            private static final int DRIVE_ID = 1;
+            private static final int STEER_ID = 5;
+            private static final int ENCODER_ID = 1;
+            private static final Angle ENCODER_OFFSET = Rotations.of(-0.4365234375);
+            private static final boolean STEER_INVERTED = false;
+            private static final boolean ENCODER_INVERTED = false;
+            private static final boolean DRIVE_INVERTED = false;
+
+            public static final Distance X_POS = MODULE_DISTANCE_X.div(2);
+            public static final Distance Y_POS = MODULE_DISTANCE_Y.div(2);
+
+            public static final SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
+                    MODULE_CONSTANTS = CONSTANT_CREATOR.createModuleConstants(
+                            STEER_ID,
+                            DRIVE_ID,
+                            ENCODER_ID,
+                            ENCODER_OFFSET,
+                            X_POS,
+                            Y_POS,
+                            DRIVE_INVERTED,
+                            STEER_INVERTED,
+                            ENCODER_INVERTED);
+        }
+
+        public static class FrontRight {
+            private static final int DRIVE_ID = 2;
+            private static final int STEER_ID = 6;
+            private static final int ENCODER_ID = 2;
+            private static final Angle ENCODER_OFFSET = Rotations.of(0.115478515625);
+            private static final boolean STEER_INVERTED = false;
+            private static final boolean ENCODER_INVERTED = false;
+            private static final boolean DRIVE_INVERTED = true;
+
+            public static final Distance X_POS = MODULE_DISTANCE_X.div(2);
+            public static final Distance Y_POS = MODULE_DISTANCE_Y.div(-2);
+
+            public static final SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
+                    MODULE_CONSTANTS = CONSTANT_CREATOR.createModuleConstants(
+                            STEER_ID,
+                            DRIVE_ID,
+                            ENCODER_ID,
+                            ENCODER_OFFSET,
+                            X_POS,
+                            Y_POS,
+                            DRIVE_INVERTED,
+                            STEER_INVERTED,
+                            ENCODER_INVERTED);
+        }
+
+        public static class BackLeft {
+            private static final int DRIVE_ID = 4;
+            private static final int STEER_ID = 8;
+            private static final int ENCODER_ID = 4;
+            private static final Angle ENCODER_OFFSET = Rotations.of(-0.11083984375);
+            private static final boolean STEER_INVERTED = false;
+            private static final boolean ENCODER_INVERTED = false;
+            private static final boolean DRIVE_INVERTED = false;
+
+            public static final Distance X_POS = MODULE_DISTANCE_X.div(-2);
+            public static final Distance Y_POS = MODULE_DISTANCE_Y.div(2);
+
+            public static final SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
+                    MODULE_CONSTANTS = CONSTANT_CREATOR.createModuleConstants(
+                            STEER_ID,
+                            DRIVE_ID,
+                            ENCODER_ID,
+                            ENCODER_OFFSET,
+                            X_POS,
+                            Y_POS,
+                            DRIVE_INVERTED,
+                            STEER_INVERTED,
+                            ENCODER_INVERTED);
+        }
+
+        public static class BackRight {
+            private static final int DRIVE_ID = 3;
+            private static final int STEER_ID = 7;
+            private static final int ENCODER_ID = 3;
+            private static final Angle ENCODER_OFFSET = Rotations.of(0.28515625);
+            private static final boolean STEER_INVERTED = false;
+            private static final boolean ENCODER_INVERTED = false;
+            private static final boolean DRIVE_INVERTED = true;
+
+            public static final Distance X_POS = MODULE_DISTANCE_X.div(-2);
+            public static final Distance Y_POS = MODULE_DISTANCE_Y.div(-2);
+
+            public static final SwerveModuleConstants<TalonFXConfiguration, TalonFXConfiguration, CANcoderConfiguration>
+                    MODULE_CONSTANTS = CONSTANT_CREATOR.createModuleConstants(
+                            STEER_ID,
+                            DRIVE_ID,
+                            ENCODER_ID,
+                            ENCODER_OFFSET,
+                            X_POS,
+                            Y_POS,
+                            DRIVE_INVERTED,
+                            STEER_INVERTED,
+                            ENCODER_INVERTED);
+        }
+
+        public static final Supplier<Translation2d[]> GET_MODULE_POSITIONS = () -> new Translation2d[] {
+            new Translation2d(SwerveConstants.FrontLeft.X_POS, SwerveConstants.FrontLeft.Y_POS),
+            new Translation2d(SwerveConstants.FrontRight.X_POS, SwerveConstants.FrontRight.Y_POS),
+            new Translation2d(SwerveConstants.BackLeft.X_POS, SwerveConstants.BackLeft.Y_POS),
+            new Translation2d(SwerveConstants.BackRight.X_POS, SwerveConstants.BackRight.Y_POS),
+        };
+
+        public static final Frequency ODOMETRY_UPDATE_FREQ = Hertz.of(250); // 0 Hz = default 250 Hz for CAN FD
+        public static final Matrix<N3, N1> ODOMETRY_STD_DEV = VecBuilder.fill(0.02, 0.02, 0.01);
+
+        public static final DriveRequestType DRIVE_REQUEST_TYPE = DriveRequestType.Velocity;
+        public static final SteerRequestType STEER_REQUEST_TYPE = SteerRequestType.MotionMagicExpo;
+
+        public static final LinearVelocity LINEAR_VEL_DEADBAND = MetersPerSecond.of(0.02);
+        public static final AngularVelocity ANGLULAR_VEL_DEADBAND = DegreesPerSecond.of(1);
+
+        // Characterization
+        public static final Time FF_START_DELAY = Seconds.of(2.0);
+        public static final Velocity<VoltageUnit> FF_RAMP_RATE = Volts.of(0.1).per(Second);
+        public static final AngularVelocity FF_WHEEL_RADIUS_MAX_VELOCITY = RadiansPerSecond.of(0.25);
+        public static final AngularAcceleration FF_WHEEL_RADIUS_RAMP_RATE = RadiansPerSecondPerSecond.of(0.05);
+    }
+
+    
+    public static class VisionConstants {
+        // Standard deviation baselines for 1 meter distance to single tag
+        public static final double LINEAR_STD_DEV_BASELINE = 0.08; // Meters
+        public static final double ANGULAR_STD_DEV_BASELINE = 1.0; // Radians
+
+        public static final String[] CAMERA_NAMES = {
+            "Arducam_OV9281_FL01", "Arducam_OV9281_FR01",
+            "Arducam_OV9281_BL01", "Arducam_OV9281_BR01"
+        };
+
+        public static final double MAX_AMBIGUITY = 0.3;
+
+        public static final AprilTagFieldLayout APRIL_TAGS =
+                AprilTagFieldLayout.loadField(AprilTagFields.kDefaultField);
+
+        // Transforms from robot to cameras, (x forward, y left, z up), (roll, pitch,
+        // yaw)
+        public static final Transform3d[] CAMERA_TRANSFORMS = {
+            new Transform3d(new Translation3d(), new Rotation3d()),
+            new Transform3d(new Translation3d(), new Rotation3d()),
+            new Transform3d(new Translation3d(), new Rotation3d()),
+            new Transform3d(new Translation3d(), new Rotation3d())
+        };
+    }
+
+  private Constants() {}
+}

@@ -1,0 +1,38 @@
+{
+  "version": "2025.0",
+  "command": {
+    "type": "sequential",
+    "data": {
+      "commands": [
+        {
+          "type": "sequential",
+          "data": {
+            "commands": [
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "StartShooter"
+                }
+              },
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "leftover intake 1"
+                }
+              },
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "EndShooter"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "resetOdom": true,
+  "folder": null,
+  "choreoAuto": false
+}

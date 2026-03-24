@@ -7,11 +7,16 @@ package frc.robot;
 import com.ctre.phoenix6.HootAutoReplay;
 
 import edu.wpi.first.math.util.Units;
-import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
-public class Robot extends TimedRobot {
+import org.littletonrobotics.junction.LoggedRobot;
+import org.littletonrobotics.junction.Logger;
+import org.littletonrobotics.junction.networktables.NT4Publisher;
+import org.littletonrobotics.junction.wpilog.WPILOGReader;
+import org.littletonrobotics.junction.wpilog.WPILOGWriter;
+
+public class Robot extends LoggedRobot {
     private Command m_autonomousCommand;
 
     private final RobotContainer m_robotContainer;
@@ -24,6 +29,16 @@ public class Robot extends TimedRobot {
     private final boolean kUseLimelight = false;
 
     public Robot() {
+        // Set up AdvantageKit logger
+        if (isReal()) {
+            Logger.addDataReceiver(new WPILOGWriter()); // Log to USB stick (/U/logs) or RIO
+            Logger.addDataReceiver(new NT4Publisher()); // Publish to NetworkTables for live viewing
+        } else {
+            // Simulation: publish to NT4 for AdvantageScope
+            Logger.addDataReceiver(new NT4Publisher());
+        }
+        Logger.start(); // Must be called before any subsystems are created
+
         m_robotContainer = new RobotContainer();
     }
 

@@ -3,6 +3,8 @@ package frc.robot.subsystems;
 import static edu.wpi.first.units.Units.*;
 
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
+import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
 import com.ctre.phoenix6.SignalLogger;
@@ -16,6 +18,7 @@ import com.pathplanner.lib.config.PIDConstants;
 import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -53,6 +56,11 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
 
     /** Swerve request to apply during robot-centric path following */
     private final SwerveRequest.ApplyRobotSpeeds m_pathApplyRobotSpeeds = new SwerveRequest.ApplyRobotSpeeds();
+
+    /** Swerve request for heading lock — drives field-centric while holding a target rotation */
+    private final SwerveRequest.FieldCentricFacingAngle m_aimRequest = new SwerveRequest.FieldCentricFacingAngle();
+    private final SwerveRequest.SwerveDriveBrake m_xLock = new SwerveRequest.SwerveDriveBrake();
+    private static final double kAimToleranceRadians = Math.toRadians(3);
 
     /* Swerve requests to apply during SysId characterization */
     private final SwerveRequest.SysIdSwerveTranslation m_translationCharacterization = new SwerveRequest.SysIdSwerveTranslation();
@@ -136,6 +144,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         SwerveModuleConstants<?, ?, ?>... modules
     ) {
         super(drivetrainConstants, modules);
+        configureAimRequest();
         if (Utils.isSimulation()) {
             startSimThread();
         }
@@ -161,6 +170,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         SwerveModuleConstants<?, ?, ?>... modules
     ) {
         super(drivetrainConstants, odometryUpdateFrequency, modules);
+        configureAimRequest();
         if (Utils.isSimulation()) {
             startSimThread();
         }
@@ -194,10 +204,78 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         SwerveModuleConstants<?, ?, ?>... modules
     ) {
         super(drivetrainConstants, odometryUpdateFrequency, odometryStandardDeviation, visionStandardDeviation, modules);
+        configureAimRequest();
         if (Utils.isSimulation()) {
             startSimThread();
         }
         configureAutoBuilder();
+    }
+
+    private void configureAimRequest() {
+        m_aimRequest.HeadingController.setPID(7, 0, 0);
+        m_aimRequest.HeadingController.enableContinuousInput(-Math.PI, Math.PI);
+    }
+
+    /**
+     * Returns a command that drives field-centric while holding the given target rotation.
+     * Translation is controlled by the provided X/Y suppliers (e.g. joystick axes).
+     *
+     * @param target     The field-relative heading to hold
+     * @param velocityX  Supplier for forward velocity in m/s
+     * @param velocityY  Supplier for lateral velocity in m/s
+     */
+    public Command aimAt(Rotation2d target, DoubleSupplier velocityX, DoubleSupplier velocityY) {
+        return applyRequest(() ->
+            m_aimRequest
+                .withTargetDirection(target)
+                .withVelocityX(velocityX.getAsDouble())
+                .withVelocityY(velocityY.getAsDouble())
+        ).withName("AimAt");
+         
+    }
+
+    public Pose2d getPose(){
+        return getState().Pose;
+    }
+
+    public ChassisSpeeds getChassisSpeeds(){
+        return getState().Speeds;
+    }
+    public void  zeroGyro(){
+        resetPose(new Pose2d(getPose().getX(), getPose().getY(), new Rotation2d()));
+    }
+
+    /**
+     * Returns a command that rotates in place to the given target rotation,
+     * ends when aimed, then locks wheels in X mode unless skipXLock returns true.
+     *
+     * @param target     The field-relative heading to hold
+     * @param skipXLock  If true when the command ends, skips the X lock (e.g. superstructure is passing)
+     */
+    public Command aimAt(Rotation2d target, BooleanSupplier skipXLock) {
+        return applyRequest(() ->
+            m_aimRequest
+                .withTargetDirection(target)
+                .withVelocityX(0.0)
+                .withVelocityY(0.0)
+        )
+        .until(() -> Math.abs(MathUtil.angleModulus(
+            getPose().getRotation().getRadians() - target.getRadians())) < kAimToleranceRadians)
+        .finallyDo(interrupted -> {
+            if (!skipXLock.getAsBoolean()) {
+                setControl(m_xLock);
+            }
+        });
+    }
+
+    /**
+     * Returns a command that rotates in place to the given target rotation,
+     * ends when aimed, then locks wheels in X mode.
+     *
+     * @param target The field-relative heading to hold
+     */
+    public Command aimAt(Rotation2d target) {
+        return aimAt(target, () -> false);
     }
 
     private void configureAutoBuilder() {
