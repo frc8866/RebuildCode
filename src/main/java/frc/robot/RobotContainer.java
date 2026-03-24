@@ -23,6 +23,7 @@ import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -49,7 +50,7 @@ public class RobotContainer {
 
     /* Setting up bindings for necessary control of the swerve drive platform */
     private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
-            .withDeadband(MaxSpeed * 0.1).withRotationalDeadband(MaxAngularRate * 0.1) // Add a 10% deadband
+            .withDeadband(MaxSpeed * 0.2).withRotationalDeadband(MaxAngularRate * 0.2) // Add a 10% deadband
             .withDriveRequestType(DriveRequestType.OpenLoopVoltage); // Use open-loop control for drive motors
     private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
     private final SwerveRequest.PointWheelsAt point = new SwerveRequest.PointWheelsAt();
@@ -86,6 +87,16 @@ public class RobotContainer {
 
     public final Vision vision = new Vision(
         drivetrain::addVisionMeasurement,
+        cameraIndex -> {
+            if (DriverStation.isAutonomousEnabled()) {
+                if (cameraIndex == 0) { // shooter cam only during shooting states
+                    return superstructure.currentState == Superstructure.SuperstructureCurrentState.SHOOTING
+                        || superstructure.currentState == Superstructure.SuperstructureCurrentState.PRE_SHOOT;
+                }
+                return false; // left/right cams off in auto
+            }
+            return true; // teleop: all cameras accepted
+        },
         new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam),
         new VisionIOPhotonVision(kLeftCameraName, robotToLeftCam),
         new VisionIOPhotonVision(kRightCameraName, robotToRightCam));
@@ -168,7 +179,7 @@ public class RobotContainer {
         // Reset the field-centric heading on left bumper press.
         joystick.a().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
 
-        joystick.rightTrigger().whileTrue(drivetrain.aimAt(superstructure.getHubHeading(), () -> superstructure.isPassing()));
+        joystick.rightTrigger().whileTrue(drivetrain.aimAt(superstructure::getHubHeading, superstructure::isPassing));
         joystick.rightTrigger().onTrue(superstructure.setShooting())
             .onFalse(superstructure.setDriving());
 

@@ -212,7 +212,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     }
 
     private void configureAimRequest() {
-        m_aimRequest.HeadingController.setPID(7, 0, 0);
+        m_aimRequest.HeadingController.setPID(5, 0, 0.1);
         m_aimRequest.HeadingController.enableContinuousInput(-Math.PI, Math.PI);
     }
 
@@ -252,20 +252,28 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
      * @param target     The field-relative heading to hold
      * @param skipXLock  If true when the command ends, skips the X lock (e.g. superstructure is passing)
      */
-    public Command aimAt(Rotation2d target, BooleanSupplier skipXLock) {
-        return applyRequest(() ->
-            m_aimRequest
+    public Command aimAt(Supplier<Rotation2d> targetSupplier, BooleanSupplier skipXLock) {
+        return applyRequest(() -> {
+            Rotation2d target = targetSupplier.get();
+            return m_aimRequest
                 .withTargetDirection(target)
                 .withVelocityX(0.0)
-                .withVelocityY(0.0)
-        )
-        .until(() -> Math.abs(MathUtil.angleModulus(
-            getPose().getRotation().getRadians() - target.getRadians())) < kAimToleranceRadians)
+                .withVelocityY(0.0);
+        })
+        .until(() -> {
+            Rotation2d target = targetSupplier.get();
+            return Math.abs(MathUtil.angleModulus(
+                getPose().getRotation().getRadians() - target.getRadians())) < kAimToleranceRadians;
+        })
         .finallyDo(interrupted -> {
             if (!skipXLock.getAsBoolean()) {
                 setControl(m_xLock);
             }
         });
+    }
+
+    public Command aimAt(Rotation2d target, BooleanSupplier skipXLock) {
+        return aimAt(() -> target, skipXLock);
     }
 
     /**
@@ -275,7 +283,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
      * @param target The field-relative heading to hold
      */
     public Command aimAt(Rotation2d target) {
-        return aimAt(target, () -> false);
+        return aimAt(() -> target, () -> false);
     }
 
     private void configureAutoBuilder() {

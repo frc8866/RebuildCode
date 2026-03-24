@@ -68,6 +68,8 @@ public class Superstructure extends SubsystemBase{
     
     public SuperstructureWantedState wantedState = SuperstructureWantedState.DRIVING;
     public SuperstructureCurrentState currentState = SuperstructureCurrentState.DRIVING;
+    private SuperstructureCurrentState previousCurrentState = SuperstructureCurrentState.DRIVING;
+    private Pose2d autoShootSavedPose = null;
     private double targetDistanceMeters = 0.0;
     private static final double kShotIntervalSeconds = 0.2;
     private double lastShotTimestamp = 0.0;
@@ -279,8 +281,9 @@ public class Superstructure extends SubsystemBase{
         Logger.recordOutput("Aimed at the hub", isAimedAtHub());
         handleStates();
         applyStates();
+        handleAutoShootOdometry();
 
-    
+
   }
 
 
@@ -1162,6 +1165,27 @@ public class Superstructure extends SubsystemBase{
     }
 
     
+
+    private void handleAutoShootOdometry() {
+        boolean isShootingState = currentState == SuperstructureCurrentState.SHOOTING
+            || currentState == SuperstructureCurrentState.PRE_SHOOT;
+        boolean wasShootingState = previousCurrentState == SuperstructureCurrentState.SHOOTING
+            || previousCurrentState == SuperstructureCurrentState.PRE_SHOOT;
+
+        if (!wasShootingState && isShootingState && DriverStation.isAutonomous()) {
+            autoShootSavedPose = drive.getPose();
+            Logger.recordOutput("AutoShootOdometry/SavedPose", autoShootSavedPose);
+        }
+
+        if (wasShootingState && !isShootingState && autoShootSavedPose != null) {
+            Pose2d restored = new Pose2d(autoShootSavedPose.getTranslation(), drive.getPose().getRotation());
+            drive.resetPose(restored);
+            Logger.recordOutput("AutoShootOdometry/RestoredPose", restored);
+            autoShootSavedPose = null;
+        }
+
+        previousCurrentState = currentState;
+    }
 
     private boolean isAimedAtHub() {
         double desired = getHubHeading().getRadians();
