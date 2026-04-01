@@ -44,11 +44,17 @@ public class VisionIOPhotonVision implements VisionIO {
     public void updateInputs(VisionIOInputs inputs) {
         inputs.connected = camera.isConnected();
 
-        // Read new camera observations
+        // Only process the newest frame so unread PhotonVision backlog cannot stall the main loop.
+        org.photonvision.targeting.PhotonPipelineResult latestResult = null;
+        for (var unreadResult : camera.getAllUnreadResults()) {
+            latestResult = unreadResult;
+        }
+
         Set<Short> tagIds = new HashSet<>();
         List<PoseObservation> poseObservations = new LinkedList<>();
         List<TargetObservation> targetObservations = new LinkedList<>();
-        for (var result : camera.getAllUnreadResults()) {
+        if (latestResult != null) {
+            var result = latestResult;
             for (var target : result.targets) {
                 targetObservations.add(new TargetObservation(
                         Rotation2d.fromDegrees(target.getYaw()),
@@ -117,6 +123,8 @@ public class VisionIOPhotonVision implements VisionIO {
                             PoseObservationType.PHOTONVISION)); // Observation type
                 }
             }
+        } else {
+            inputs.latestTargetObservation = new TargetObservation(new Rotation2d(), new Rotation2d());
         }
 
         // Save simple target observations to inputs object

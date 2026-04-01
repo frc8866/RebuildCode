@@ -65,17 +65,20 @@ public class Intake extends SubsystemBase{
     TalonFXConfiguration talonFXConfigs = new TalonFXConfiguration();
 
     private static final double kSimDtSeconds = 0.02;
-    private static final double kIntakePositionRotations = 20;
+    private static final double kIntakePositionRotations = 23;
     private static final double kHomePositionRotations = 0.0;
-    private static final double kIntakeVoltage = 9;
+    private static final double kIntakeVoltage = 12;
     private static final double kHomingVoltage = -3;
     private static final double kPositionToleranceRotations = 1.0;
-    private static final double kIntakeP = 0.5;
+    private static final double kIntakeP = 0.8;
     private static final double kIntakeI = 0.0;
     private static final double kIntakeD = 0.0;
     private static final double kMaxIntakePidVoltage = 8.0;
     private static final double kShootPositionRotations = 0;
     private static final double kMaxShootPidVoltage = 1.5;
+    private static final double kGamePieceVelocityThreshold = 2.0;
+    private static final double kGamePiecePositionRotations = 18.0;
+    private static final double kGamePiecePositionTolerance = 3.0;
     private static final double kIntakeGearRatio = 10.0;
     private static final double kIntakeDrumRadiusMeters = 0.02;
     private static final double kIntakeMassKg = 2.0;
@@ -152,6 +155,7 @@ public class Intake extends SubsystemBase{
     public void periodic() {
         updateInputs();
         Logger.processInputs("Intake", inputs);
+        Logger.recordOutput("Intake111", intakeMotor.getStatorCurrent().getValueAsDouble());
         handleStates();
         applyStates();
         lastState = currentState;
@@ -239,18 +243,20 @@ public class Intake extends SubsystemBase{
                 break;
             case INTAKE:
                 double pos = intakeMotor.getPosition().getValueAsDouble();
-                if (Math.abs(pos - kIntakePositionRotations) <= kPositionToleranceRotations) {
+                double armVelocity = Math.abs(intakeMotor.getVelocity().getValueAsDouble());
+                boolean nearDetectPos = Math.abs(pos - kGamePiecePositionRotations) <= kGamePiecePositionTolerance;
+                if (nearDetectPos && armVelocity <= kGamePieceVelocityThreshold) {
+                    intakeMotor.setVoltage(0);
+                    intakePid.reset();
+                } else if (Math.abs(pos - kIntakePositionRotations) <= kPositionToleranceRotations) {
                     intakeMotor.setVoltage(0);
                     intakePid.reset();
                 } else {
                     double output = intakePid.calculate(pos, kIntakePositionRotations);
-                    
                     output = Math.max(-kMaxIntakePidVoltage, Math.min(kMaxIntakePidVoltage, output));
                     intakeMotor.setVoltage(output);
                 }
                 intakeWheels.setVoltage(-kIntakeVoltage);
-
-
                 break;
             case HOME:
                 double p = intakeMotor.getPosition().getValueAsDouble();

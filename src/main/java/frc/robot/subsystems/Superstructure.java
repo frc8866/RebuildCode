@@ -74,7 +74,7 @@ public class Superstructure extends SubsystemBase{
     private static final double kShotIntervalSeconds = 0.2;
     private double lastShotTimestamp = 0.0;
     private static final double kShotExitHeightMeters = 0.6;
-    private static final double kAimToleranceDeg = 3;
+    private static final double kAimToleranceDeg = 8;
     private static final double kIntakeApproachKp = 1.5;
     private static final double kIntakeApproachMaxSpeedMps = 1.5;
     private static final double kIntakeStopDistanceMeters = 0.15;
@@ -104,8 +104,8 @@ public class Superstructure extends SubsystemBase{
     private static final Translation2d kBlueTrench2 = new Translation2d(4.622, 0.603);
     private static final Translation2d kRedTrench1 = new Translation2d(11.877, 7.405);
     private static final Translation2d kRedTrench2 = new Translation2d(11.888, 0.675);
-    private static final Translation2d kBluePassPoint2 = new Translation2d(1.777, 6.753);
-    private static final Translation2d kBluePassPoint1 = new Translation2d(1.536, 1.7);
+    private static final Translation2d kBluePassPoint2 = new Translation2d(2.899, 6.753);
+    private static final Translation2d kBluePassPoint1 = new Translation2d(2.899, 1.7);
 
     public boolean in = false;
     public boolean spin = false;
@@ -202,7 +202,7 @@ public class Superstructure extends SubsystemBase{
     private boolean dashboardSpindexerReverse = false;
     private boolean dashboardFunnling = false;
     private boolean dashboardManual = false;
-    private boolean dashboardConfirm = false;
+    private boolean forceShoot = false;
     private String dashboardPassingSelection = "";
     private boolean shootOnMoveEnabled = true;
     private final LookUpTable lookUpTable = new LookUpTable();
@@ -388,10 +388,6 @@ public class Superstructure extends SubsystemBase{
         if (shootPulse) {
             wantedState = SuperstructureWantedState.PRE_SHOOT;
         }
-        if (confirmPulse) {
-            dashboardConfirm = true;
-        }
-
         dashboardPassingSelection = getLatestPassingSelection();
     }
 
@@ -403,12 +399,12 @@ public class Superstructure extends SubsystemBase{
                 
                 break;
             case DRIVING:
-            // if(ifRevUP()){
-            //     currentState = SuperstructureCurrentState.REVUP;
-            // }
-            // else{                
-            //     currentState = SuperstructureCurrentState.DRIVING;
-        //}
+            if(ifRevUP()){
+                currentState = SuperstructureCurrentState.REVUP;
+            }
+            else{                
+                currentState = SuperstructureCurrentState.DRIVING;
+        }
             
                                 currentState = SuperstructureCurrentState.DRIVING;
 
@@ -420,7 +416,7 @@ public class Superstructure extends SubsystemBase{
                 currentState = SuperstructureCurrentState.DASHBOARD;
                 break;
             case SHOOTING:
-                if (shootCheck()) {
+                if (forceShoot || shootCheck()) {
                     if (isInFunnelingXRange()) {
                         currentState = SuperstructureCurrentState.PASSING;
                     } else {
@@ -482,7 +478,7 @@ public class Superstructure extends SubsystemBase{
     public boolean shootCheck(){
         if (shooter.isAtVelocity()
             && hood.isAtTargetAngle(hood.getTargetAngleDegrees())
-            && isAimedAtHub()
+            && (dashboardManual || isAimedAtHub())
             && drive.getChassisSpeeds().omegaRadiansPerSecond < Units.degreesToRadians(5)) {
             return true;
 
@@ -499,7 +495,6 @@ public class Superstructure extends SubsystemBase{
         }
         if (currentState != SuperstructureCurrentState.PRE_SHOOT
             && currentState != SuperstructureCurrentState.PASSING) {
-            dashboardConfirm = false;
         }
         switch (currentState) {
             case IDLE:
@@ -560,20 +555,13 @@ public class Superstructure extends SubsystemBase{
              break;
 
         case PASSING:
-        dashboardConfirm = true;
         double passVelocityRps = updatePassSetpointsAndGetShooterVelocityRps();
 
-        if (dashboardConfirm) {
-            if(shooter.isAtVelocity()){
-                shooter.preShoot(passVelocityRps, true);
-                intake.shoot();
-            }
-            else{
-                shooter.preShoot(passVelocityRps, false);
-            }
+        if (shooter.isAtVelocity() && isAimedAtHub()) {
+            shooter.preShoot(passVelocityRps, true);
+            intake.shoot();
         } else {
-            hood.setIdle();
-            shooter.setOff();
+            shooter.preShoot(passVelocityRps, false);
         }
 
         if(dashboardIntakeIn){
@@ -624,7 +612,7 @@ public class Superstructure extends SubsystemBase{
             shooter.setSpindexerManualEnabled(false);
         }
 
-                if(shooter.isAtVelocity()&& isAimedAtHub() && drive.getChassisSpeeds().omegaRadiansPerSecond< Units.degreesToRadians(2)){
+                if(shooter.isAtVelocity()&& (dashboardManual || isAimedAtHub()) && drive.getChassisSpeeds().omegaRadiansPerSecond< Units.degreesToRadians(2)){
                     spawnFuelShot();
                 }
             }
@@ -699,11 +687,22 @@ public class Superstructure extends SubsystemBase{
     public Command setDriving(){
         return Commands.runOnce(() -> {
             wantedState = SuperstructureWantedState.DRIVING;
-        });    
+            forceShoot = false;
+        });
+    }
+
+    public Command setForceShoot(boolean force) {
+        return Commands.runOnce(() -> forceShoot = force);
     }
 
     public Command setReverseIntake() {
         return Commands.runOnce(this::requestReverseIntake);
+    }
+
+    public Command setPassing() {
+        return Commands.runOnce(() -> {
+            wantedState = SuperstructureWantedState.PASSING;
+        });
     }
 
     public void spawnFuelShot() {
@@ -842,7 +841,7 @@ public class Superstructure extends SubsystemBase{
                 : Constants.FieldConstants.HUB_BLUE.toTranslation2d();
             target = shootOnMoveEnabled ? getLeadCompensatedHubTarget(hubTarget) : hubTarget;
         }
-        return getRotationToPoint(target).plus(Rotation2d.fromDegrees(180));
+        return getRotationToPoint(target).plus(Rotation2d.fromDegrees(0));
     }
 
     private double getPassingDistanceMeters() {
@@ -964,6 +963,10 @@ public class Superstructure extends SubsystemBase{
 
     public Command toggleShootOnMoveCommand() {
         return Commands.runOnce(this::toggleShootOnMove);
+    }
+
+    public boolean isManual() {
+        return dashboardManual;
     }
 
     public boolean isPassing(){
@@ -1188,7 +1191,7 @@ public class Superstructure extends SubsystemBase{
     }
 
     private boolean isAimedAtHub() {
-        double desired = getHubHeading().getRadians();
+        double desired = getHubHeading().getRadians() + Math.PI;
         double current = drive.getPose().getRotation().getRadians();
         double error = MathUtil.angleModulus(desired - current);
         Logger.recordOutput("Hub", Math.abs(Units.radiansToDegrees(error)));

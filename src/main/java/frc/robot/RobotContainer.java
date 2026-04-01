@@ -6,8 +6,10 @@ package frc.robot;
 
 import static edu.wpi.first.units.Units.*;
 
+import java.util.List;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
+import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 
@@ -17,12 +19,15 @@ import com.pathplanner.lib.commands.FollowPathCommand;
 import com.pathplanner.lib.commands.PathPlannerAuto;
 import com.pathplanner.lib.util.PathPlannerLogging;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -31,19 +36,24 @@ import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
+import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 
+import frc.robot.commands.FeedforwardCharacterizationCommand;
+import frc.robot.commands.WheelRadiusCharacterizationCommand;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Hood.Hood;
 import frc.robot.subsystems.Intake.Intake;
 import frc.robot.subsystems.Shooter.Shooter;
 import frc.robot.subsystems.Superstructure;
+import frc.robot.subsystems.Turret;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIOPhotonVision;
 
 
 public class RobotContainer {
+    private static final double kMotorTooHotThresholdC = 54.4444444444;
     private double MaxSpeed = 1.0 * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
     private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
 
@@ -61,6 +71,8 @@ public class RobotContainer {
 
     private final Telemetry logger = new Telemetry(MaxSpeed);
 
+    private boolean autoRotateFlip = false;
+
     private final CommandXboxController joystick = new CommandXboxController(0);
 
     public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
@@ -68,10 +80,31 @@ public class RobotContainer {
     public final Shooter shooter = new Shooter();
     public final Hood hood = new Hood();
     public final Intake intake = new Intake();
+    public final Turret turret = new Turret(drivetrain::getPose);
     public final Superstructure superstructure = new Superstructure(drivetrain, shooter, hood, intake);
     private static final String kShooterCameraName = "shooter";
-    private static final String kLeftCameraName = "left1";
-    private static final String kRightCameraName = "right1";
+    private final NetworkTable motorHealthTable =
+        NetworkTableInstance.getDefault().getTable("MotorHealth");
+    private final List<MonitoredMotor> monitoredMotors = List.of(
+        new MonitoredMotor("Front Left Drive", new TalonFX(8, TunerConstants.kCANBus.getName())),
+        new MonitoredMotor("Front Left Steer", new TalonFX(3, TunerConstants.kCANBus.getName())),
+        new MonitoredMotor("Front Right Drive", new TalonFX(9, TunerConstants.kCANBus.getName())),
+        new MonitoredMotor("Front Right Steer", new TalonFX(4, TunerConstants.kCANBus.getName())),
+        new MonitoredMotor("Back Left Drive", new TalonFX(6, TunerConstants.kCANBus.getName())),
+        new MonitoredMotor("Back Left Steer", new TalonFX(1, TunerConstants.kCANBus.getName())),
+        new MonitoredMotor("Back Right Drive", new TalonFX(7, TunerConstants.kCANBus.getName())),
+        new MonitoredMotor("Back Right Steer", new TalonFX(2, TunerConstants.kCANBus.getName())),
+        new MonitoredMotor("Shooter Leader", new TalonFX(1)),
+        new MonitoredMotor("Shooter Follower", new TalonFX(2)),
+        new MonitoredMotor("Spindexer Spinner", new TalonFX(18)),
+        new MonitoredMotor("Spindexer Wheel", new TalonFX(20)),
+        new MonitoredMotor("Intake Arm", new TalonFX(11)),
+        new MonitoredMotor("Intake Wheels", new TalonFX(16)),
+        new MonitoredMotor("Hood", new TalonFX(17)),
+        new MonitoredMotor("Turret Leader", new TalonFX(30)),
+        new MonitoredMotor("Turret Follower", new TalonFX(31))
+    );
+
 
     private final Transform3d robotToShooterCam = new Transform3d(
         new Translation3d(Units.inchesToMeters(2), Units.inchesToMeters(0.003), Units.inchesToMeters(17)),
@@ -97,26 +130,33 @@ public class RobotContainer {
             }
             return true; // teleop: all cameras accepted
         },
-        new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam),
-        new VisionIOPhotonVision(kLeftCameraName, robotToLeftCam),
-        new VisionIOPhotonVision(kRightCameraName, robotToRightCam));
+        new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam));
 
     /* Path follower */
     private final LoggedDashboardChooser<Command> autoChooser;
 
-    public RobotContainer() {
-        autoChooser = new LoggedDashboardChooser<>("Auto Chooser", AutoBuilder.buildAutoChooser());
+    private record MonitoredMotor(String name, TalonFX motor) {}
 
+    public RobotContainer() {
         NamedCommands.registerCommand("shoot",
-            Commands.sequence(
-                superstructure.setShooting(),
-                Commands.defer(
-                    () -> drivetrain.aimAt(superstructure.getHubHeading(), () -> superstructure.isPassing())
-                        .withTimeout(10),
-                    java.util.Set.of(drivetrain)),
-                superstructure.goIn(true),
-                superstructure.setDriving()));
-        NamedCommands.registerCommand("accshoot", superstructure.setShooting());
+            Commands.deadline(
+                Commands.sequence(
+                    superstructure.setShooting(),
+                    Commands.defer(
+                        () -> drivetrain.aimAt(
+                            () -> {
+                                boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
+                                double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
+                                return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
+                            },
+                            () -> 0.0,
+                            () -> 0.0)
+                            .repeatedly().withTimeout(5),
+                        java.util.Set.of(drivetrain)),
+                    superstructure.goIn(true),
+                    superstructure.setDriving()),
+                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(true))));
+        NamedCommands.registerCommand("accshoot", Commands.sequence(superstructure.setShooting(), Commands.waitSeconds(5)));
         NamedCommands.registerCommand("intake", superstructure.setIntake());
         NamedCommands.registerCommand("drive",
             Commands.sequence(superstructure.setDriving(), superstructure.goIn(true)));
@@ -124,6 +164,10 @@ public class RobotContainer {
             Commands.defer(
                 () -> drivetrain.aimAt(Rotation2d.fromDegrees(0)).withTimeout(3),
                 java.util.Set.of(drivetrain)));
+
+        autoChooser = new LoggedDashboardChooser<>("Auto Chooser", AutoBuilder.buildAutoChooser());
+        autoChooser.addOption("Feedforward Characterization", new FeedforwardCharacterizationCommand(drivetrain));
+        autoChooser.addOption("Wheel Radius Characterization", new WheelRadiusCharacterizationCommand(drivetrain));
 
         configureBindings();
 
@@ -179,25 +223,36 @@ public class RobotContainer {
         // Reset the field-centric heading on left bumper press.
         joystick.a().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
 
-        joystick.rightTrigger().whileTrue(drivetrain.aimAt(superstructure::getHubHeading, superstructure::isPassing));
-        joystick.rightTrigger().onTrue(superstructure.setShooting())
+        joystick.x().onTrue(Commands.runOnce(() -> autoRotateFlip = !autoRotateFlip));
+
+        joystick.rightTrigger().and(new Trigger(superstructure::isManual).negate())
+            .whileTrue(drivetrain.aimAt(
+                () -> {
+                    boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
+                    double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
+                    return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
+                },
+                () -> superstructure.isPassing() ? MathUtil.clamp(MathUtil.applyDeadband(-joystick.getLeftY(), 0.2) * MaxSpeed, -0.2, 0.1) : 0.0,
+                () -> superstructure.isPassing() ? MathUtil.clamp(MathUtil.applyDeadband(-joystick.getLeftX(), 0.2) * MaxSpeed, -0.2, 0.1) : 0.0));
+        joystick.rightTrigger().onTrue(
+                Commands.either(superstructure.setPassing(), superstructure.setShooting(), superstructure::isPassing))
             .onFalse(superstructure.setDriving());
 
         joystick.leftTrigger().onTrue(superstructure.setIntake())
             .onFalse(superstructure.setDriving());
 
         joystick.leftBumper().onTrue(superstructure.goIn(true)).onFalse(superstructure.goIn(false));
-        joystick.rightBumper().onTrue(superstructure.spin(true)).onFalse(superstructure.spin(false));
 
         joystick.y().onTrue(superstructure.setDriving());
 
-        joystick.start().and(joystick.y().negate()).and(joystick.x().negate())
+        joystick.rightBumper()
             .onTrue(superstructure.setReverseIntake())
             .onFalse(superstructure.setDriving());
 
         drivetrain.registerTelemetry(logger::telemeterize);
-    }
 
+        joystick.b().whileTrue(Commands.runOnce(() -> turret.moveToAngle(30))).whileFalse(Commands.runOnce(()-> turret.idle()));
+            }
     public Command getAutonomousCommand() {
         /* Run the path selected from the auto chooser */
         Command selectedAuto = autoChooser.get();
@@ -210,5 +265,73 @@ public class RobotContainer {
     }
     return selectedAuto;
     
+    }
+
+    public void updateMotorHealthDashboard() {
+        StringBuilder disconnectedMotors = new StringBuilder();
+        StringBuilder hotMotors = new StringBuilder();
+        boolean allMotorsConnected = true;
+        boolean allMotorsCool = true;
+
+        for (MonitoredMotor monitoredMotor : monitoredMotors) {
+            boolean connected = monitoredMotor.motor().isConnected();
+            double motorTempC = monitoredMotor.motor().getDeviceTemp().getValueAsDouble();
+            boolean tooHot = motorTempC > kMotorTooHotThresholdC;
+            String motorKey = monitoredMotor.name().replace(" ", "");
+            NetworkTable motorTable = motorHealthTable.getSubTable(motorKey);
+
+            SmartDashboard.putBoolean("Motor Health/" + monitoredMotor.name() + "/Connected", connected);
+            SmartDashboard.putNumber("Motor Health/" + monitoredMotor.name() + "/TempC", motorTempC);
+            SmartDashboard.putBoolean("Motor Health/" + monitoredMotor.name() + "/TooHot", tooHot);
+            motorTable.getEntry("Name").setString(monitoredMotor.name());
+            motorTable.getEntry("Connected").setBoolean(connected);
+            motorTable.getEntry("TempC").setDouble(motorTempC);
+            motorTable.getEntry("TooHot").setBoolean(tooHot);
+
+            if (!connected) {
+                allMotorsConnected = false;
+                appendMotorName(disconnectedMotors, monitoredMotor.name());
+            }
+
+            if (tooHot) {
+                allMotorsCool = false;
+                appendMotorName(hotMotors, monitoredMotor.name() + String.format(" (%.2f C)", motorTempC));
+            }
+        }
+
+        String disconnectedText = disconnectedMotors.length() == 0 ? "None" : disconnectedMotors.toString();
+        String hotText = hotMotors.length() == 0 ? "None" : hotMotors.toString();
+        String overallStatus;
+
+        if (allMotorsConnected && allMotorsCool) {
+            overallStatus = "All motors connected and below " + kMotorTooHotThresholdC + " C";
+        } else if (!allMotorsConnected && !allMotorsCool) {
+            overallStatus = "Disconnected: " + disconnectedText + " | Too hot: " + hotText;
+        } else if (!allMotorsConnected) {
+            overallStatus = "Disconnected: " + disconnectedText;
+        } else {
+            overallStatus = "Too hot: " + hotText;
+        }
+
+        SmartDashboard.putBoolean("Motor Health/AllConnected", allMotorsConnected);
+        SmartDashboard.putBoolean("Motor Health/AllCool", allMotorsCool);
+        SmartDashboard.putBoolean("Motor Health/Healthy", allMotorsConnected && allMotorsCool);
+        SmartDashboard.putString("Motor Health/DisconnectedMotors", disconnectedText);
+        SmartDashboard.putString("Motor Health/HotMotors", hotText);
+        SmartDashboard.putString("Motor Health/OverallStatus", overallStatus);
+        motorHealthTable.getEntry("AllConnected").setBoolean(allMotorsConnected);
+        motorHealthTable.getEntry("AllCool").setBoolean(allMotorsCool);
+        motorHealthTable.getEntry("Healthy").setBoolean(allMotorsConnected && allMotorsCool);
+        motorHealthTable.getEntry("DisconnectedMotors").setString(disconnectedText);
+        motorHealthTable.getEntry("HotMotors").setString(hotText);
+        motorHealthTable.getEntry("OverallStatus").setString(overallStatus);
+        motorHealthTable.getEntry("TooHotThresholdC").setDouble(kMotorTooHotThresholdC);
+    }
+
+    private static void appendMotorName(StringBuilder builder, String motorName) {
+        if (builder.length() > 0) {
+            builder.append(", ");
+        }
+        builder.append(motorName);
     }
 }

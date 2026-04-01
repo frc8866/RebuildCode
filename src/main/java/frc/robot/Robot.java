@@ -46,6 +46,7 @@ public class Robot extends LoggedRobot {
     public void robotPeriodic() {
         m_timeAndJoystickReplay.update();
         CommandScheduler.getInstance().run();
+        m_robotContainer.updateMotorHealthDashboard();
 
         /*
          * This example of adding Limelight is very simple and may not be sufficient for on-field use.

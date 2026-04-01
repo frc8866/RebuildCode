@@ -17,21 +17,27 @@
           }
         },
         {
-          "type": "path",
+          "type": "named",
           "data": {
-            "pathName": "depot"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "shoot"
+            "name": "shoot"
           }
         },
         {
           "type": "path",
           "data": {
             "pathName": "2nd life"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Back"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "shoot"
           }
         }
       ]

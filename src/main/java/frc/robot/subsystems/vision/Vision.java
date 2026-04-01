@@ -26,6 +26,7 @@ import edu.wpi.first.networktables.BooleanPublisher;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.subsystems.vision.VisionIO.PoseObservationType;
@@ -103,14 +104,19 @@ public class Vision extends SubsystemBase {
         boolean shouldLog = nowSeconds - lastLogTimeSeconds >= kLogPeriodSeconds;
         boolean anyHasTarget = false;
         for (int i = 0; i < io.length; i++) {
-            io[i].updateInputs(inputs[i]);
-            if (shouldLog) {
-                Logger.processInputs("Vision/Camera" + Integer.toString(i), inputs[i]);
-            }
-            if (inputs[i].targetObservations.length > 0
-                    || inputs[i].tagIds.length > 0
-                    || inputs[i].poseObservations.length > 0) {
-                anyHasTarget = true;
+            try {
+                io[i].updateInputs(inputs[i]);
+                if (shouldLog) {
+                    Logger.processInputs("Vision/Camera" + Integer.toString(i), inputs[i]);
+                }
+                if (inputs[i].targetObservations.length > 0
+                        || inputs[i].tagIds.length > 0
+                        || inputs[i].poseObservations.length > 0) {
+                    anyHasTarget = true;
+                }
+            } catch (Throwable t) {
+                DriverStation.reportError("Vision camera " + i + " update failed.", t.getStackTrace());
+                inputs[i] = new VisionIOInputsAutoLogged();
             }
         }
         hasTargetPublisher.set(anyHasTarget);
@@ -228,10 +234,14 @@ public class Vision extends SubsystemBase {
         }
 
         if (bestObservation != null) {
-            consumer.accept(
-                    bestObservation.observation().pose().toPose2d(),
-                    bestObservation.observation().timestamp(),
-                    bestObservation.visionMeasurementStdDevs());
+            try {
+                consumer.accept(
+                        bestObservation.observation().pose().toPose2d(),
+                        bestObservation.observation().timestamp(),
+                        bestObservation.visionMeasurementStdDevs());
+            } catch (Throwable t) {
+                DriverStation.reportError("Vision measurement application failed.", t.getStackTrace());
+            }
         }
     }
 

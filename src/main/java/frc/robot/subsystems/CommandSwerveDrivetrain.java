@@ -225,13 +225,24 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
      * @param velocityY  Supplier for lateral velocity in m/s
      */
     public Command aimAt(Rotation2d target, DoubleSupplier velocityX, DoubleSupplier velocityY) {
+
+        
         return applyRequest(() ->
             m_aimRequest
                 .withTargetDirection(target)
                 .withVelocityX(velocityX.getAsDouble())
                 .withVelocityY(velocityY.getAsDouble())
         ).withName("AimAt");
-         
+
+    }
+
+    public Command aimAt(Supplier<Rotation2d> targetSupplier, DoubleSupplier velocityX, DoubleSupplier velocityY) {
+        return applyRequest(() ->
+            m_aimRequest
+                .withTargetDirection(targetSupplier.get())
+                .withVelocityX(velocityX.getAsDouble())
+                .withVelocityY(velocityY.getAsDouble())
+        ).withName("AimAt");
     }
 
     public Pose2d getPose(){
@@ -303,7 +314,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
                     // PID constants for translation
                     new PIDConstants(10, 0, 0),
                     // PID constants for rotation
-                    new PIDConstants(7, 0, 0)
+                    new PIDConstants(5, 0, 0)
                 ),
                 config,
                 // Assume the path needs to be flipped for Red vs Blue, this is normally the case
@@ -392,6 +403,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
      */
     @Override
     public void addVisionMeasurement(Pose2d visionRobotPoseMeters, double timestampSeconds) {
+        if (Utils.isSimulation()) return;
         super.addVisionMeasurement(visionRobotPoseMeters, Utils.fpgaToCurrentTime(timestampSeconds));
     }
 
@@ -414,6 +426,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         double timestampSeconds,
         Matrix<N3, N1> visionMeasurementStdDevs
     ) {
+        if (Utils.isSimulation()) return;
         super.addVisionMeasurement(visionRobotPoseMeters, Utils.fpgaToCurrentTime(timestampSeconds), visionMeasurementStdDevs);
     }
 
