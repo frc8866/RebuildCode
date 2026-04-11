@@ -58,7 +58,8 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     private final SwerveRequest.ApplyRobotSpeeds m_pathApplyRobotSpeeds = new SwerveRequest.ApplyRobotSpeeds();
 
     /** Swerve request for heading lock — drives field-centric while holding a target rotation */
-    private final SwerveRequest.FieldCentricFacingAngle m_aimRequest = new SwerveRequest.FieldCentricFacingAngle();
+    private final SwerveRequest.FieldCentricFacingAngle m_aimRequest = new SwerveRequest.FieldCentricFacingAngle()
+        .withDeadband(0.2).withRotationalDeadband(0);
     private final SwerveRequest.SwerveDriveBrake m_xLock = new SwerveRequest.SwerveDriveBrake();
     private static final double kAimToleranceRadians = Math.toRadians(3);
 
@@ -226,7 +227,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
      */
     public Command aimAt(Rotation2d target, DoubleSupplier velocityX, DoubleSupplier velocityY) {
 
-        
+
         return applyRequest(() ->
             m_aimRequest
                 .withTargetDirection(target)
@@ -243,6 +244,24 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
                 .withVelocityX(velocityX.getAsDouble())
                 .withVelocityY(velocityY.getAsDouble())
         ).withName("AimAt");
+    }
+
+    /**
+     * Like aimAt, but when {@code enableXLock} is true and the requested velocity is near zero,
+     * applies SwerveDriveBrake (X-lock) instead of FieldCentricFacingAngle.
+     * When moving, aims and drives normally. Pass {@code () -> false} to disable X-lock entirely.
+     */
+    public Command aimAtWithXLock(Supplier<Rotation2d> targetSupplier,
+            DoubleSupplier velocityX, DoubleSupplier velocityY,
+            BooleanSupplier enableXLock) {
+        return applyRequest(() -> {
+            double vx = enableXLock.getAsBoolean() ? 0.0 : velocityX.getAsDouble();
+            double vy = enableXLock.getAsBoolean() ? 0.0 : velocityY.getAsDouble();
+            return m_aimRequest
+                    .withTargetDirection(targetSupplier.get())
+                    .withVelocityX(vx)
+                    .withVelocityY(vy);
+        }).withName("AimAtWithXLock");
     }
 
     public Pose2d getPose(){

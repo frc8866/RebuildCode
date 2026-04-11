@@ -90,7 +90,7 @@ private double jerk = 0;
       ;
   config.MotionMagic = new MotionMagicConfigs()
       .withMotionMagicCruiseVelocity(1000)
-      .withMotionMagicAcceleration(1200)   
+      .withMotionMagicAcceleration(1200)
       .withMotionMagicJerk(0);
 
         config.MotorOutput.Inverted = InvertedValue.CounterClockwise_Positive;

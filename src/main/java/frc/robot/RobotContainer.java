@@ -6,6 +6,7 @@ package frc.robot;
 
 import static edu.wpi.first.units.Units.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
@@ -29,8 +30,6 @@ import edu.wpi.first.math.util.Units;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -47,7 +46,6 @@ import frc.robot.subsystems.Hood.Hood;
 import frc.robot.subsystems.Intake.Intake;
 import frc.robot.subsystems.Shooter.Shooter;
 import frc.robot.subsystems.Superstructure;
-import frc.robot.subsystems.Turret;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIOPhotonVision;
 
@@ -72,6 +70,7 @@ public class RobotContainer {
     private final Telemetry logger = new Telemetry(MaxSpeed);
 
     private boolean autoRotateFlip = false;
+    private boolean autoIsTier2 = false;
 
     private final CommandXboxController joystick = new CommandXboxController(0);
 
@@ -80,7 +79,6 @@ public class RobotContainer {
     public final Shooter shooter = new Shooter();
     public final Hood hood = new Hood();
     public final Intake intake = new Intake();
-    public final Turret turret = new Turret(drivetrain::getPose);
     public final Superstructure superstructure = new Superstructure(drivetrain, shooter, hood, intake);
     private static final String kShooterCameraName = "shooter";
     private final NetworkTable motorHealthTable =
@@ -100,9 +98,8 @@ public class RobotContainer {
         new MonitoredMotor("Spindexer Wheel", new TalonFX(20)),
         new MonitoredMotor("Intake Arm", new TalonFX(11)),
         new MonitoredMotor("Intake Wheels", new TalonFX(16)),
-        new MonitoredMotor("Hood", new TalonFX(17)),
-        new MonitoredMotor("Turret Leader", new TalonFX(30)),
-        new MonitoredMotor("Turret Follower", new TalonFX(31))
+        new MonitoredMotor("Hood", new TalonFX(17))
+        
     );
 
 
@@ -140,7 +137,14 @@ public class RobotContainer {
     public RobotContainer() {
         NamedCommands.registerCommand("shoot",
             Commands.deadline(
+                Commands.waitSeconds(4).andThen(Commands.runOnce(() -> {
+                    if (DriverStation.isAutonomous() && autoIsTier2) {
+                        drivetrain.resetPose(vision.getLatestAcceptedPose().orElse(drivetrain.getPose()));
+                    }
+                })).andThen(superstructure.setDriving()),
                 Commands.sequence(
+                    superstructure.setIntake(),
+                    Commands.waitSeconds(0.2),
                     superstructure.setShooting(),
                     Commands.defer(
                         () -> drivetrain.aimAt(
@@ -151,10 +155,9 @@ public class RobotContainer {
                             },
                             () -> 0.0,
                             () -> 0.0)
-                            .repeatedly().withTimeout(5),
+                            .repeatedly().withTimeout(2),
                         java.util.Set.of(drivetrain)),
-                    superstructure.goIn(true),
-                    superstructure.setDriving()),
+                    superstructure.goIn(true)),
                 Commands.waitSeconds(1).andThen(superstructure.setForceShoot(true))));
         NamedCommands.registerCommand("accshoot", Commands.sequence(superstructure.setShooting(), Commands.waitSeconds(5)));
         NamedCommands.registerCommand("intake", superstructure.setIntake());
@@ -213,6 +216,14 @@ public class RobotContainer {
             forwardStraight.withVelocityX(-0.5).withVelocityY(0))
         );
 
+        joystick.povLeft().whileTrue(drivetrain.applyRequest(() ->
+            forwardStraight.withVelocityX(0).withVelocityY(0.5))
+        );
+        joystick.povRight().whileTrue(drivetrain.applyRequest(() ->
+            forwardStraight.withVelocityX(0).withVelocityY(-0.5))
+        );
+
+
         // Run SysId routines when holding back/start and X/Y.
         // Note that each routine should be run exactly once in a single log.
         // joystick.back().and(joystick.y()).whileTrue(drivetrain.sysIdDynamic(Direction.kForward));
@@ -225,20 +236,28 @@ public class RobotContainer {
 
         joystick.x().onTrue(Commands.runOnce(() -> autoRotateFlip = !autoRotateFlip));
 
-        joystick.rightTrigger().and(new Trigger(superstructure::isManual).negate())
-            .whileTrue(drivetrain.aimAt(
+ 
+        joystick.rightTrigger().and(joystick.leftTrigger().negate()).and(new Trigger(superstructure::isManual).negate())
+            .whileTrue(drivetrain.aimAtWithXLock(
                 () -> {
                     boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
                     double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
                     return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
                 },
-                () -> superstructure.isPassing() ? MathUtil.clamp(MathUtil.applyDeadband(-joystick.getLeftY(), 0.2) * MaxSpeed, -0.2, 0.1) : 0.0,
-                () -> superstructure.isPassing() ? MathUtil.clamp(MathUtil.applyDeadband(-joystick.getLeftX(), 0.2) * MaxSpeed, -0.2, 0.1) : 0.0));
-        joystick.rightTrigger().onTrue(
+                () -> -MathUtil.clamp(joystick.getLeftY() * 10, -1, 1) * 0.4,
+                () -> -MathUtil.clamp(joystick.getLeftX() * 10, -1, 1) * 0.4,
+                () -> !superstructure.isPassing())); 
+
+
+        joystick.rightTrigger().and(joystick.leftTrigger().negate()).onTrue(
                 Commands.either(superstructure.setPassing(), superstructure.setShooting(), superstructure::isPassing))
             .onFalse(superstructure.setDriving());
 
-        joystick.leftTrigger().onTrue(superstructure.setIntake())
+        joystick.leftTrigger().and(joystick.rightTrigger().negate()).onTrue(superstructure.setIntake())
+            .onFalse(superstructure.setDriving());
+
+        joystick.leftTrigger().and(joystick.rightTrigger())
+            .onTrue(superstructure.setIntakeHold())
             .onFalse(superstructure.setDriving());
 
         joystick.leftBumper().onTrue(superstructure.goIn(true)).onFalse(superstructure.goIn(false));
@@ -251,16 +270,16 @@ public class RobotContainer {
 
         drivetrain.registerTelemetry(logger::telemeterize);
 
-        joystick.b().whileTrue(Commands.runOnce(() -> turret.moveToAngle(30))).whileFalse(Commands.runOnce(()-> turret.idle()));
             }
     public Command getAutonomousCommand() {
         /* Run the path selected from the auto chooser */
         Command selectedAuto = autoChooser.get();
+        autoIsTier2 = (selectedAuto instanceof PathPlannerAuto ppa) && ppa.getName().contains("Teir 2");
     if (selectedAuto instanceof PathPlannerAuto pathPlannerAuto
         && pathPlannerAuto.getStartingPose() != null) {
       return Commands.sequence(
           AutoBuilder.resetOdom(pathPlannerAuto.getStartingPose()),
-          
+
           selectedAuto.asProxy());
     }
     return selectedAuto;
@@ -270,6 +289,8 @@ public class RobotContainer {
     public void updateMotorHealthDashboard() {
         StringBuilder disconnectedMotors = new StringBuilder();
         StringBuilder hotMotors = new StringBuilder();
+        List<String> disconnectedMotorNames = new ArrayList<>();
+        List<String> hotMotorNames = new ArrayList<>();
         boolean allMotorsConnected = true;
         boolean allMotorsCool = true;
 
@@ -280,9 +301,6 @@ public class RobotContainer {
             String motorKey = monitoredMotor.name().replace(" ", "");
             NetworkTable motorTable = motorHealthTable.getSubTable(motorKey);
 
-            SmartDashboard.putBoolean("Motor Health/" + monitoredMotor.name() + "/Connected", connected);
-            SmartDashboard.putNumber("Motor Health/" + monitoredMotor.name() + "/TempC", motorTempC);
-            SmartDashboard.putBoolean("Motor Health/" + monitoredMotor.name() + "/TooHot", tooHot);
             motorTable.getEntry("Name").setString(monitoredMotor.name());
             motorTable.getEntry("Connected").setBoolean(connected);
             motorTable.getEntry("TempC").setDouble(motorTempC);
@@ -290,12 +308,15 @@ public class RobotContainer {
 
             if (!connected) {
                 allMotorsConnected = false;
+                disconnectedMotorNames.add(monitoredMotor.name());
                 appendMotorName(disconnectedMotors, monitoredMotor.name());
             }
 
             if (tooHot) {
                 allMotorsCool = false;
-                appendMotorName(hotMotors, monitoredMotor.name() + String.format(" (%.2f C)", motorTempC));
+                String hotMotorText = monitoredMotor.name() + String.format(" (%.2f C)", motorTempC);
+                hotMotorNames.add(hotMotorText);
+                appendMotorName(hotMotors, hotMotorText);
             }
         }
 
@@ -313,19 +334,31 @@ public class RobotContainer {
             overallStatus = "Too hot: " + hotText;
         }
 
-        SmartDashboard.putBoolean("Motor Health/AllConnected", allMotorsConnected);
-        SmartDashboard.putBoolean("Motor Health/AllCool", allMotorsCool);
-        SmartDashboard.putBoolean("Motor Health/Healthy", allMotorsConnected && allMotorsCool);
-        SmartDashboard.putString("Motor Health/DisconnectedMotors", disconnectedText);
-        SmartDashboard.putString("Motor Health/HotMotors", hotText);
-        SmartDashboard.putString("Motor Health/OverallStatus", overallStatus);
         motorHealthTable.getEntry("AllConnected").setBoolean(allMotorsConnected);
         motorHealthTable.getEntry("AllCool").setBoolean(allMotorsCool);
         motorHealthTable.getEntry("Healthy").setBoolean(allMotorsConnected && allMotorsCool);
         motorHealthTable.getEntry("DisconnectedMotors").setString(disconnectedText);
+        motorHealthTable.getEntry("DisconnectedMotorsList")
+            .setStringArray(disconnectedMotorNames.toArray(String[]::new));
         motorHealthTable.getEntry("HotMotors").setString(hotText);
+        motorHealthTable.getEntry("HotMotorsList")
+            .setStringArray(hotMotorNames.toArray(String[]::new));
         motorHealthTable.getEntry("OverallStatus").setString(overallStatus);
         motorHealthTable.getEntry("TooHotThresholdC").setDouble(kMotorTooHotThresholdC);
+    }
+
+    private static final double kPassingMaxSpeed = 0.1; // m/s — total vector magnitude cap while passing
+
+    private edu.wpi.first.math.geometry.Translation2d getPassingVelocity() {
+        double vx = MathUtil.applyDeadband(-joystick.getLeftY(), 0.2) * MaxSpeed;
+        double vy = MathUtil.applyDeadband(-joystick.getLeftX(), 0.2) * MaxSpeed;
+        double mag = Math.hypot(vx, vy);
+        if (mag > kPassingMaxSpeed) {
+            double scale = kPassingMaxSpeed / mag;
+            vx *= scale;
+            vy *= scale;
+        }
+        return new edu.wpi.first.math.geometry.Translation2d(vx, vy);
     }
 
     private static void appendMotorName(StringBuilder builder, String motorName) {

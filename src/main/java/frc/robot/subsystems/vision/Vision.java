@@ -33,6 +33,7 @@ import frc.robot.subsystems.vision.VisionIO.PoseObservationType;
 import frc.robot.subsystems.vision.VisionIO.TargetObservation;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.IntPredicate;
 import org.littletonrobotics.junction.Logger;
 
@@ -46,6 +47,7 @@ public class Vision extends SubsystemBase {
             NetworkTableInstance.getDefault().getBooleanTopic("/Vision/HasTarget").publish();
     private static final double kLogPeriodSeconds = 0.1;
     private double lastLogTimeSeconds = 0.0;
+    private Optional<Pose2d> latestAcceptedPose = Optional.empty();
 
     public Vision(VisionConsumer consumer, VisionIO... io) {
         this(consumer, cameraIndex -> true, io);
@@ -234,6 +236,7 @@ public class Vision extends SubsystemBase {
         }
 
         if (bestObservation != null) {
+            latestAcceptedPose = Optional.of(bestObservation.observation().pose().toPose2d());
             try {
                 consumer.accept(
                         bestObservation.observation().pose().toPose2d(),
@@ -248,6 +251,10 @@ public class Vision extends SubsystemBase {
     private static double scoreObservation(VisionIO.PoseObservation observation, double linearStdDev, double angularStdDev) {
         double angleComponent = Double.isFinite(angularStdDev) ? angularStdDev : 0.0;
         return linearStdDev + angleComponent - (observation.tagCount() * 0.25);
+    }
+
+    public Optional<Pose2d> getLatestAcceptedPose() {
+        return latestAcceptedPose;
     }
 
     private record BestObservation(

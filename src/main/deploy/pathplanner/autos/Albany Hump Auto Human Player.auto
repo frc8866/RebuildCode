@@ -7,13 +7,13 @@
         {
           "type": "path",
           "data": {
-            "pathName": "Intake"
+            "pathName": "Intake Blue"
           }
         },
         {
           "type": "path",
           "data": {
-            "pathName": "Back"
+            "pathName": "Back Blue"
           }
         },
         {
@@ -25,13 +25,13 @@
         {
           "type": "path",
           "data": {
-            "pathName": "2nd life"
+            "pathName": "2nd life Blue"
           }
         },
         {
           "type": "path",
           "data": {
-            "pathName": "Back"
+            "pathName": "Copy of Back Blue"
           }
         },
         {
@@ -44,6 +44,6 @@
     }
   },
   "resetOdom": true,
-  "folder": null,
+  "folder": "Comp Auto",
   "choreoAuto": false
 }

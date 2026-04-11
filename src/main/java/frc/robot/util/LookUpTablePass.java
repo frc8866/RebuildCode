@@ -1,6 +1,10 @@
 package frc.robot.util;
 
 public class LookUpTablePass {
+    private static final double MAX_HOOD_ROTATIONS = 5.7;
+    private static final double MAX_HOOD_ANGLE_DEGREES = 35.0;
+    private static final double HOOD_DEGREES_PER_ROTATION =
+        MAX_HOOD_ANGLE_DEGREES / MAX_HOOD_ROTATIONS;
 
     /**
      * Represents a single entry in the lookup table with distance and corresponding values
@@ -22,10 +26,11 @@ public class LookUpTablePass {
      *
      * These are spaced at 0.32 m increments and biased a little higher than the
      * normal shot table so the pass arc carries more clearance through midfield.
-     * Hood units match the existing table convention used by the robot code.
+     * Hood values are stored in degrees after converting the measured hood encoder
+     * rotations with hoodRotations * (35.0 / 5.7).
      */
     private static final LookUpTableEntryPass[] LOOKUP_TABLE = {
-        // Format: distance meters, hood setpoint, shooter RPM
+        // Format: distance meters, hood setpoint (raw rotations, same units as normal LookUpTable), shooter RPM
         new LookUpTableEntryPass(1.448, 3.35, 2520),
         new LookUpTableEntryPass(1.768, 3.60, 2600),
         new LookUpTableEntryPass(2.088, 3.85, 2680),
@@ -53,7 +58,40 @@ public class LookUpTablePass {
         new LookUpTableEntryPass(9.128, 5.70, 5390),
         new LookUpTableEntryPass(9.448, 5.70, 5510),
         new LookUpTableEntryPass(9.768, 5.70, 5630),
-        new LookUpTableEntryPass(10.000, 5.70, 5720)
+        new LookUpTableEntryPass(10.000, 5.70, 5720),
+        new LookUpTableEntryPass(10.088, 5.70, 5750),
+        new LookUpTableEntryPass(10.408, 5.70, 5870),
+        new LookUpTableEntryPass(10.728, 5.70, 5990),
+        new LookUpTableEntryPass(11.048, 5.70, 6110),
+        new LookUpTableEntryPass(11.368, 5.70, 6230),
+        new LookUpTableEntryPass(11.688, 5.70, 6350),
+        new LookUpTableEntryPass(12.008, 5.70, 6470),
+        new LookUpTableEntryPass(12.328, 5.70, 6590),
+        new LookUpTableEntryPass(12.648, 5.70, 6710),
+        new LookUpTableEntryPass(12.968, 5.70, 6830),
+        new LookUpTableEntryPass(13.288, 5.70, 6950),
+        new LookUpTableEntryPass(13.608, 5.70, 7070),
+        new LookUpTableEntryPass(13.928, 5.70, 7190),
+        new LookUpTableEntryPass(14.248, 5.70, 7310),
+        new LookUpTableEntryPass(14.568, 5.70, 7430),
+        new LookUpTableEntryPass(14.888, 5.70, 7550),
+        new LookUpTableEntryPass(15.000, 5.70, 7590),
+        new LookUpTableEntryPass(15.208, 5.70, 7670),
+        new LookUpTableEntryPass(15.528, 5.70, 7790),
+        new LookUpTableEntryPass(15.848, 5.70, 7910),
+        new LookUpTableEntryPass(16.168, 5.70, 8030),
+        new LookUpTableEntryPass(16.488, 5.70, 8150),
+        new LookUpTableEntryPass(16.808, 5.70, 8270),
+        new LookUpTableEntryPass(17.128, 5.70, 8390),
+        new LookUpTableEntryPass(17.448, 5.70, 8510),
+        new LookUpTableEntryPass(17.768, 5.70, 8630),
+        new LookUpTableEntryPass(18.088, 5.70, 8750),
+        new LookUpTableEntryPass(18.408, 5.70, 8870),
+        new LookUpTableEntryPass(18.728, 5.70, 8990),
+        new LookUpTableEntryPass(19.048, 5.70, 9110),
+        new LookUpTableEntryPass(19.368, 5.70, 9230),
+        new LookUpTableEntryPass(19.688, 5.70, 9350),
+        new LookUpTableEntryPass(20.000, 5.70, 9470)
     };
 
     public LookUpTablePass() {
@@ -127,5 +165,9 @@ public class LookUpTablePass {
      */
     private static double lerp(double a, double b, double t) {
         return a + (b - a) * t;
+    }
+
+    private static double hoodRotationsToDegrees(double hoodRotations) {
+        return hoodRotations * HOOD_DEGREES_PER_ROTATION;
     }
 }

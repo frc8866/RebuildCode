@@ -71,6 +71,7 @@ public class Shooter extends SubsystemBase {
  
   public double targetShooterVelocity = 0.0;
   public double targetSpindexerWheelVelocity = 0.0;
+  
       @AutoLog
   public static class shooterInputs{
     public double shooterVelocity = 0.0;
@@ -141,8 +142,9 @@ public class Shooter extends SubsystemBase {
    TalonFXConfiguration config = new TalonFXConfiguration();
         config.Slot0.kV = 0.121934; // ~12V at 100 rps (6000 rpm) for Kraken X60
         config.Slot0.kP = 0.5;
-        config.CurrentLimits.SupplyCurrentLimit =140;
-                config.CurrentLimits.StatorCurrentLimitEnable = false;
+        config.CurrentLimits.StatorCurrentLimit = 50;
+        config.CurrentLimits.StatorCurrentLimitEnable = true;
+        config.CurrentLimits.SupplyCurrentLimit = 70;
 
 
 
@@ -379,7 +381,7 @@ public class Shooter extends SubsystemBase {
   }
 
   public boolean isAtVelocity(){
-    return  Math.abs(shooterLeaderMotor.getVelocity().getValueAsDouble() - targetRPS) < 5.0;
+    return targetRPS > 10.0 && Math.abs(shooterLeaderMotor.getVelocity().getValueAsDouble() - targetRPS) < 5.0;
   }
 
   public double getTargetRPS() {

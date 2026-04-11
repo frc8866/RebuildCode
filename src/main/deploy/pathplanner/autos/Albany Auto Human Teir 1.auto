@@ -1,0 +1,49 @@
+{
+  "version": "2025.0",
+  "command": {
+    "type": "sequential",
+    "data": {
+      "commands": [
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Intake Blue"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Back Blue"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "shoot"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "2nd life Blue"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "humnp big blue"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "shoot"
+          }
+        }
+      ]
+    }
+  },
+  "resetOdom": true,
+  "folder": "Comp Auto",
+  "choreoAuto": false
+}
