@@ -6,6 +6,7 @@ package frc.robot;
 
 import com.ctre.phoenix6.HootAutoReplay;
 
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableInstance;
@@ -56,6 +57,7 @@ public class Robot extends LoggedRobot {
         CommandScheduler.getInstance().run();
         m_robotContainer.updateMotorHealthDashboard();
         updateRoboRioHealthTable();
+        Logger.recordOutput("Robot/ComponentPoses", getComponentPoses());
 
         /*
          * This example of adding Limelight is very simple and may not be sufficient for on-field use.
@@ -123,7 +125,9 @@ public class Robot extends LoggedRobot {
     public void testExit() {}
 
     @Override
-    public void simulationPeriodic() {}
+    public void simulationPeriodic() {
+       // robotContainer.fuelSim.updateSim();
+    }
 
     private void updateRoboRioHealthTable() {
         double uptimeSeconds = Timer.getFPGATimestamp() - robotBootTimestampSeconds;
@@ -177,4 +181,14 @@ public class Robot extends LoggedRobot {
 
         roboRioHealthTable.getEntry("Status").setString(status);
     }
+
+private Pose3d[] getComponentPoses() {
+    return new Pose3d[] {
+        Pose3d.kZero, // model_0
+        Pose3d.kZero, // model_1
+        Pose3d.kZero, // model_2
+        Pose3d.kZero, // model_3
+        Pose3d.kZero, // model_4
+    };
+}
 }

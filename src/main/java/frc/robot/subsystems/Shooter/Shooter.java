@@ -300,7 +300,7 @@ public class Shooter extends SubsystemBase {
       shooterLeaderMotor.setControl(shooterVoltage.withVelocity(targetRPS));
 
       if(isAtVelocity() && spindexer){
-         spindexerSpinnerMotor.setVoltage(6);
+         spindexerSpinnerMotor.setVoltage(7);
          
         spindexerWheelMotor.setVoltage(-12);
 
@@ -316,7 +316,7 @@ public class Shooter extends SubsystemBase {
       case SHOOT:
           shooterLeaderMotor.setControl(shooterVoltage.withVelocity(targetRPS));
 
-        spindexerSpinnerMotor.setVoltage(6);
+        spindexerSpinnerMotor.setVoltage(7);
         spindexerWheelMotor.setVoltage(-12);
         break;
       case SHOOTAREA:

@@ -82,7 +82,9 @@ public class Intake extends SubsystemBase{
     private static final double kIntakeI = 0.0;
     private static final double kIntakeD = 0.0;
     private static final double kMaxIntakePidVoltage = 4;
-    private static final double kShootPositionRotations = 12.24697265625; // all the way in (same as HOME)
+    private static final double kShootPositionRotations = 12;
+    //12.24697265625
+     // all the way in (same as HOME)
     private static final double kMaxShootPidVoltage = 1;
 
     private static final double kIntakeGearRatio = 10.0;
@@ -319,7 +321,7 @@ public class Intake extends SubsystemBase{
                     double output = intakePid.calculate(pos, kIntakePositionRotations);
                     setArmVoltage(output, kMaxIntakePidVoltage);
                 }
-                intakeWheels.setVoltage(-kIntakeVoltage);
+                intakeWheels.setVoltage(kIntakeVoltage); //kIntakeVoltage
                 break;
 
             case HOME:
@@ -341,7 +343,7 @@ public class Intake extends SubsystemBase{
                     double shootOutput = intakePid1.calculate(shootPos2, kShootPositionRotations);
                     setArmVoltage1(shootOutput, kMaxShootPidVoltage); // intentionally 0 voltage as in original
                 }
-                intakeWheels.setVoltage(-kIntakeVoltage);
+                intakeWheels.setVoltage(kIntakeVoltage);//kIntakeVoltage
                 break;
 
             case REVERSE:
@@ -352,12 +354,12 @@ public class Intake extends SubsystemBase{
                     double reverseOutput = intakePid.calculate(reversePos, kIntakePositionRotations);
                     setArmVoltage(reverseOutput, kMaxIntakePidVoltage);
                 }
-                intakeWheels.setVoltage(kIntakeVoltage);
+                intakeWheels.setVoltage(-kIntakeVoltage); //-kIntakeVoltage
                 break;
 
             case INTAKE_HOLD:
                 stopArmMotors();
-                intakeWheels.setVoltage(-kIntakeVoltage);
+                intakeWheels.setVoltage(kIntakeVoltage); //kIntakeVoltage
                 break;
         }
     }

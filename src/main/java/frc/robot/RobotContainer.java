@@ -38,6 +38,7 @@ import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 
+
 import frc.robot.commands.FeedforwardCharacterizationCommand;
 import frc.robot.commands.WheelRadiusCharacterizationCommand;
 import frc.robot.generated.TunerConstants;
@@ -48,6 +49,11 @@ import frc.robot.subsystems.Shooter.Shooter;
 import frc.robot.subsystems.Superstructure;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIOPhotonVision;
+import frc.robot.subsystems.led.LED;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import frc.robot.util.FuelSim;
+
+
 
 
 public class RobotContainer {
@@ -79,8 +85,16 @@ public class RobotContainer {
     public final Shooter shooter = new Shooter();
     public final Hood hood = new Hood();
     public final Intake intake = new Intake();
+    public final LED led = new LED();
     public final Superstructure superstructure = new Superstructure(drivetrain, shooter, hood, intake);
     private static final String kShooterCameraName = "shooter";
+    private static final String kLeftCameraName = "left";
+    private static final String kRightCameraName = "right";
+
+// trying fuelsim
+    public FuelSim fuelSim;
+
+
     private final NetworkTable motorHealthTable =
         NetworkTableInstance.getDefault().getTable("MotorHealth");
     private final List<MonitoredMotor> monitoredMotors = List.of(
@@ -115,6 +129,41 @@ public class RobotContainer {
         new Translation3d(Units.inchesToMeters(10), Units.inchesToMeters(0), Units.inchesToMeters(20)),
         new Rotation3d(0.0, Math.toRadians(10), Math.toRadians(-39)));
 
+    // only luma
+    // public final Vision vision = new Vision(
+    //     drivetrain::addVisionMeasurement,
+    //     cameraIndex -> {
+    //         if (DriverStation.isAutonomousEnabled()) {
+    //             if (cameraIndex == 0) { // shooter cam only during shooting states
+    //                 return superstructure.currentState == Superstructure.SuperstructureCurrentState.SHOOTING
+    //                     || superstructure.currentState == Superstructure.SuperstructureCurrentState.PRE_SHOOT;
+    //             }
+    //             return false; // left/right cams off in auto
+    //         }
+    //         return true; // teleop: all cameras accepted
+    //     },
+    //     new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam));
+
+        // with orange pi
+    // public final Vision vision = new Vision(
+    //     drivetrain::addVisionMeasurement,
+    //     cameraIndex -> {
+    //         if (DriverStation.isAutonomousEnabled()) {
+    //             if (cameraIndex == 0) { // shooter cam only during shooting states
+    //                 return superstructure.currentState == Superstructure.SuperstructureCurrentState.SHOOTING
+    //                     || superstructure.currentState == Superstructure.SuperstructureCurrentState.PRE_SHOOT;
+    //             }
+    //             return false; // left/right cams off in auto
+    //         }
+    //         return true; // teleop: all cameras accepted
+    //     },
+    //     new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam), 
+    //     new VisionIOPhotonVision(kLeftCameraName, robotToLeftCam),  
+    //     new VisionIOPhotonVision(kRightCameraName, robotToRightCam));
+        
+    
+    // only orange pi
+
     public final Vision vision = new Vision(
         drivetrain::addVisionMeasurement,
         cameraIndex -> {
@@ -126,9 +175,9 @@ public class RobotContainer {
                 return false; // left/right cams off in auto
             }
             return true; // teleop: all cameras accepted
-        },
-        new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam));
-
+        }, 
+        new VisionIOPhotonVision(kLeftCameraName, robotToLeftCam),  
+        new VisionIOPhotonVision(kRightCameraName, robotToRightCam));
     /* Path follower */
     private final LoggedDashboardChooser<Command> autoChooser;
 
@@ -188,6 +237,11 @@ public class RobotContainer {
     private void configureBindings() {
         // Note that X is defined as forward according to WPILib convention,
         // and Y is defined as to the left according to WPILib convention.
+        
+        
+        // come back here if doesnt work
+        
+        
         drivetrain.setDefaultCommand(
             // Drivetrain will execute this command periodically
             drivetrain.applyRequest(() ->
@@ -196,6 +250,24 @@ public class RobotContainer {
                     .withRotationalRate(-joystick.getRightX() * MaxAngularRate) // Drive counterclockwise with negative X (left)
             )
         );
+
+        // Try this next
+        // drivetrain.setDefaultCommand(
+        //     drivetrain.applyRequest(() -> {
+        //     ChassisSpeeds speeds = new ChassisSpeeds(
+        //         -joystick.getLeftY() * MaxSpeed,
+        //         -joystick.getLeftX() * MaxSpeed,
+        //         -joystick.getRightX() * MaxAngularRate
+        //     );
+
+        //     speeds = superstructure.applyShootOnMoveSpeedLock(speeds);
+
+        //     return drive.pppppppppppppwithVelocityX(speeds.vxMetersPerSecond)
+        //         .withVelocityY(speeds.vyMetersPerSecond)
+        //         .withRotationalRate(speeds.omegaRadiansPerSecond);
+        //     })
+        // );
+
 
         // Idle while the robot is disabled. This ensures the configured
         // neutral mode is applied to the drive motors while disabled.
@@ -244,9 +316,12 @@ public class RobotContainer {
                     double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
                     return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
                 },
-                () -> -MathUtil.clamp(joystick.getLeftY() * 10, -1, 1) * 0.4,
-                () -> -MathUtil.clamp(joystick.getLeftX() * 10, -1, 1) * 0.4,
-                () -> !superstructure.isPassing())); 
+                () -> -MathUtil.clamp(joystick.getLeftY() * 10, -1, 1) * 0.25, //0.4
+                () -> -MathUtil.clamp(joystick.getLeftX() * 10, -1, 1) * 0.25, //0.4
+                () -> false)); 
+                // to do need to test
+
+                //!superstructure.isPassing()
 
 
         joystick.rightTrigger().and(joystick.leftTrigger().negate()).onTrue(
@@ -264,9 +339,9 @@ public class RobotContainer {
 
         joystick.y().onTrue(superstructure.setDriving());
 
-        joystick.rightBumper()
-            .onTrue(superstructure.setReverseIntake())
-            .onFalse(superstructure.setDriving());
+        // joystick.rightBumper()
+        //     .onTrue(superstructure.setReverseIntake())
+        //     .onFalse(superstructure.setDriving());
 
         drivetrain.registerTelemetry(logger::telemeterize);
 

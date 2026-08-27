@@ -25,6 +25,7 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import frc.robot.Constants;
 import frc.robot.subsystems.Hood.Hood;
+import frc.robot.subsystems.Hood.Hood.CurrentState;
 import frc.robot.subsystems.Intake.Intake;
 import frc.robot.subsystems.Shooter.Shooter;
 import frc.robot.util.LookUpTable;
@@ -69,7 +70,7 @@ public class Superstructure extends SubsystemBase{
     public Intake intake;
     
     public SuperstructureWantedState wantedState = SuperstructureWantedState.DRIVING;
-    public SuperstructureCurrentState currentState = SuperstructureCurrentState.DRIVING;
+    public static SuperstructureCurrentState currentState = SuperstructureCurrentState.DRIVING;
     private SuperstructureCurrentState previousCurrentState = SuperstructureCurrentState.DRIVING;
     private Pose2d autoShootSavedPose = null;
     private double targetDistanceMeters = 0.0;
@@ -98,7 +99,7 @@ public class Superstructure extends SubsystemBase{
     private static final double kMovingShotMinLeadTimeSeconds = 0.05;
     private static final double kMovingShotMaxLeadTimeSeconds = 0.35;
     private static final double kMovingShotFallbackHorizontalMps = 8.0;
-    private static final double kShootOnMoveLockedSpeedMps = 0.12;
+    private static final double kShootOnMoveLockedSpeedMps = 0.25; // can be changed based on chassis speeds
     private static final double kFunnelingMinX = 5.8;
     private static final double kFunnelingMaxX = 10.5;
     private static final double kTrenchHoodDropRadiusMeters = 0.8;
@@ -481,6 +482,11 @@ public class Superstructure extends SubsystemBase{
         }
         return triggered;
     }
+
+    public static SuperstructureCurrentState getCurrentState() {
+        return currentState;
+    }
+
     public boolean shootCheck(){
         if (shooter.isAtVelocity()
             && hood.isAtTargetAngle(hood.getTargetAngleDegrees())
@@ -884,8 +890,11 @@ public class Superstructure extends SubsystemBase{
             Translation2d hubTarget = DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red
                 ? Constants.FieldConstants.HUB_RED.toTranslation2d()
                 : Constants.FieldConstants.HUB_BLUE.toTranslation2d();
-            target = shootOnMoveEnabled ? getLeadCompensatedHubTarget(hubTarget, 1.0) : hubTarget;
+            target = shootOnMoveEnabled ? getLeadCompensatedHubTarget(hubTarget, 1.05) : hubTarget; 
         }
+
+        // leadmultiplier needs to be tuned
+
         return getRotationToPoint(target).plus(Rotation2d.fromDegrees(0));
     }
 
