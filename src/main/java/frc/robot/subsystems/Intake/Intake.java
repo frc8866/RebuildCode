@@ -24,6 +24,7 @@ import edu.wpi.first.wpilibj.simulation.DCMotorSim;
 import edu.wpi.first.wpilibj.simulation.ElevatorSim;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.subsystems.Shooter.Shooter;
 
 import static edu.wpi.first.units.Units.Inches;
 import static edu.wpi.first.units.Units.Kilograms;
@@ -43,7 +44,7 @@ public class Intake extends SubsystemBase{
 
         double moi = Pounds.of(8.0).in(Kilograms) * Math.pow(radius.in(Meters), 2);
 
-
+    public Shooter shooter;
 
 
     @AutoLog
@@ -322,6 +323,7 @@ public class Intake extends SubsystemBase{
                     setArmVoltage(output, kMaxIntakePidVoltage);
                 }
                 intakeWheels.setVoltage(kIntakeVoltage); //kIntakeVoltage
+
                 break;
 
             case HOME:

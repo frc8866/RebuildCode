@@ -527,7 +527,7 @@ public class Superstructure extends SubsystemBase{
                 hood.setIdle();
                 intake.startIntake();
                 shooter.setSpindexerManualEnabled(false);
-                
+                shooter.whaletail(3);
                 break;
             case DASHBOARD:
                 shooter.dashboard(
@@ -582,6 +582,8 @@ public class Superstructure extends SubsystemBase{
         hood.setIdle();
         intake.reverse();
         shooter.setSpindexerManualOverride(false, false);
+        shooter.whaletail(3);
+
         break;
 
         case INTAKE_HOLD:

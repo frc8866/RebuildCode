@@ -130,19 +130,19 @@ public class RobotContainer {
         new Rotation3d(0.0, Math.toRadians(10), Math.toRadians(-39)));
 
     // only luma
-    // public final Vision vision = new Vision(
-    //     drivetrain::addVisionMeasurement,
-    //     cameraIndex -> {
-    //         if (DriverStation.isAutonomousEnabled()) {
-    //             if (cameraIndex == 0) { // shooter cam only during shooting states
-    //                 return superstructure.currentState == Superstructure.SuperstructureCurrentState.SHOOTING
-    //                     || superstructure.currentState == Superstructure.SuperstructureCurrentState.PRE_SHOOT;
-    //             }
-    //             return false; // left/right cams off in auto
-    //         }
-    //         return true; // teleop: all cameras accepted
-    //     },
-    //     new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam));
+    public final Vision vision = new Vision(
+        drivetrain::addVisionMeasurement,
+        cameraIndex -> {
+            if (DriverStation.isAutonomousEnabled()) {
+                if (cameraIndex == 0) { // shooter cam only during shooting states
+                    return superstructure.currentState == Superstructure.SuperstructureCurrentState.SHOOTING
+                        || superstructure.currentState == Superstructure.SuperstructureCurrentState.PRE_SHOOT;
+                }
+                return false; // left/right cams off in auto
+            }
+            return true; // teleop: all cameras accepted
+        },
+        new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam));
 
         // with orange pi
     // public final Vision vision = new Vision(
@@ -164,20 +164,20 @@ public class RobotContainer {
     
     // only orange pi
 
-    public final Vision vision = new Vision(
-        drivetrain::addVisionMeasurement,
-        cameraIndex -> {
-            if (DriverStation.isAutonomousEnabled()) {
-                if (cameraIndex == 0) { // shooter cam only during shooting states
-                    return superstructure.currentState == Superstructure.SuperstructureCurrentState.SHOOTING
-                        || superstructure.currentState == Superstructure.SuperstructureCurrentState.PRE_SHOOT;
-                }
-                return false; // left/right cams off in auto
-            }
-            return true; // teleop: all cameras accepted
-        }, 
-        new VisionIOPhotonVision(kLeftCameraName, robotToLeftCam),  
-        new VisionIOPhotonVision(kRightCameraName, robotToRightCam));
+    // public final Vision vision = new Vision(
+    //     drivetrain::addVisionMeasurement,
+    //     cameraIndex -> {
+    //         if (DriverStation.isAutonomousEnabled()) {
+    //             if (cameraIndex == 0) { // shooter cam only during shooting states
+    //                 return superstructure.currentState == Superstructure.SuperstructureCurrentState.SHOOTING
+    //                     || superstructure.currentState == Superstructure.SuperstructureCurrentState.PRE_SHOOT;
+    //             }
+    //             return false; // left/right cams off in auto
+    //         }
+    //         return true; // teleop: all cameras accepted
+    //     }, 
+    //     new VisionIOPhotonVision(kLeftCameraName, robotToLeftCam),  
+    //     new VisionIOPhotonVision(kRightCameraName, robotToRightCam));
     /* Path follower */
     private final LoggedDashboardChooser<Command> autoChooser;
 
@@ -339,9 +339,9 @@ public class RobotContainer {
 
         joystick.y().onTrue(superstructure.setDriving());
 
-        // joystick.rightBumper()
-        //     .onTrue(superstructure.setReverseIntake())
-        //     .onFalse(superstructure.setDriving());
+        joystick.rightBumper()
+            .onTrue(superstructure.setReverseIntake())
+            .onFalse(superstructure.setDriving());
 
         drivetrain.registerTelemetry(logger::telemeterize);
 

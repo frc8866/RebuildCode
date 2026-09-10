@@ -348,7 +348,10 @@ public class Shooter extends SubsystemBase {
     }
   }
 
-
+  public void whaletail(double voltage) {
+    spindexerSpinnerMotor.setVoltage(-voltage);
+    spindexerWheelMotor.setVoltage(10);
+  }
 
 
   public void setOff() {
