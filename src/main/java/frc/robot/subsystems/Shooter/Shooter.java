@@ -1,6 +1,7 @@
 package frc.robot.subsystems.Shooter;
 
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.DutyCycle;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.Timer;
@@ -56,6 +57,7 @@ public class Shooter extends SubsystemBase {
   private static final double kSpindexerSimMoi = 0.005;
   private static final double kSimGearRatio = 1;
   private static final double kSpindexerPulseSeconds = 0.25;
+  private static final double kIntakeWhaletailVoltage = -3.0;
 
   private TalonFXSimState shooterLeaderSim;
   private TalonFXSimState shooterFollowerSim;
@@ -71,12 +73,16 @@ public class Shooter extends SubsystemBase {
  
   public double targetShooterVelocity = 0.0;
   public double targetSpindexerWheelVelocity = 0.0;
+
+  private final VoltageOut m_spindexerVoltage = new VoltageOut(8.0);
+  private final VoltageOut m_whaletailVoltage = new VoltageOut(-3);
   
       @AutoLog
   public static class shooterInputs{
     public double shooterVelocity = 0.0;
     public double spindexerSpinnerVelocity = 0.0;
     public double spindexerWheelVelocity = 0.0;
+    public double spindexerSpinnerPositionRotations = 0.0;
     public boolean shooterAtVelocity = false;
     public boolean spindexerWheelAtVelocity = false;
     public double targetVelocity = 0.0;
@@ -107,6 +113,7 @@ public class Shooter extends SubsystemBase {
 
   public enum WantedState {
     OFF,
+    INTAKING,
     PRE_SHOOT,
     SHOOT,
     SHOOTAREA,
@@ -117,6 +124,7 @@ public class Shooter extends SubsystemBase {
 
   public enum CurrentState {
     OFF,
+    INTAKING,
     PRE_SHOOT,
     SHOOT,
     SHOOTAREA,
@@ -232,6 +240,7 @@ public class Shooter extends SubsystemBase {
     inputs.spindexerWheelVelocity = spindexerWheelMotor.getVelocity().getValueAsDouble();
     inputs.shooterAtVelocity = Math.abs(shooterLeaderMotor.getVelocity().getValueAsDouble() - targetRPS) < 3;
     inputs.targetVelocity = targetRPS;
+    inputs.spindexerSpinnerPositionRotations = spindexerSpinnerMotor.getPosition().getValueAsDouble();
     inputs.shooterAppliedVoltage = shooterLeaderMotor.getMotorVoltage().getValueAsDouble();
     inputs.shooterCurrent = shooterLeaderMotor.getStatorCurrent().getValueAsDouble();
     inputs.currentState = currentState.toString();
@@ -249,6 +258,11 @@ public class Shooter extends SubsystemBase {
 
   }
 
+  
+  public double getSpindexerPositionRotations() {
+      return inputs.spindexerSpinnerPositionRotations;
+  }
+
   public double getangularVelocity(){
     return shooterLeaderMotor.getVelocity().getValueAsDouble() * 2 * Math.PI;
   }
@@ -261,6 +275,9 @@ public class Shooter extends SubsystemBase {
     switch (wantedState) {
       case OFF:
         currentState = CurrentState.OFF;
+        break;
+      case INTAKING:
+        currentState = CurrentState.INTAKING;
         break;
       case PRE_SHOOT:
         currentState = CurrentState.PRE_SHOOT;
@@ -290,37 +307,38 @@ public class Shooter extends SubsystemBase {
 
     switch (currentState) {
       case OFF:
-        shooterLeaderMotor.setVoltage(0);;
+        shooterLeaderMotor.setVoltage(0);
         spindexerSpinnerMotor.setVoltage(0);
-        spindexerWheelMotor.setVoltage(0);;
+        spindexerWheelMotor.setVoltage(0);
 
+        break;
+
+      case INTAKING:
+        shooterLeaderMotor.setVoltage(0);
+        spindexerSpinnerMotor.setControl(m_whaletailVoltage.withEnableFOC(true));
+        spindexerWheelMotor.setVoltage(10);
         break;
 
       case PRE_SHOOT:
       shooterLeaderMotor.setControl(shooterVoltage.withVelocity(targetRPS));
 
       if(isAtVelocity() && spindexer){
-         spindexerSpinnerMotor.setVoltage(7);
-         
+        spindexerSpinnerMotor.setControl(m_spindexerVoltage.withEnableFOC(true));
         spindexerWheelMotor.setVoltage(-12);
-
-
-      }
-      else{
-                spindexerSpinnerMotor.setVoltage(0);
+      }else {
+        spindexerSpinnerMotor.setVoltage(0);
         spindexerWheelMotor.setVoltage(0);
       }
 
        
         break;
       case SHOOT:
-          shooterLeaderMotor.setControl(shooterVoltage.withVelocity(targetRPS));
-
-        spindexerSpinnerMotor.setVoltage(7);
+        shooterLeaderMotor.setControl(shooterVoltage.withVelocity(targetRPS));
+        spindexerSpinnerMotor.setControl(m_spindexerVoltage.withEnableFOC(true));
         spindexerWheelMotor.setVoltage(-12);
         break;
       case SHOOTAREA:
-        shooterLeaderMotor.setVoltage(2);;
+        shooterLeaderMotor.setVoltage(2);
         spindexerSpinnerMotor.setVoltage(0);
         spindexerWheelMotor.setVoltage(0);
         break;
@@ -340,17 +358,26 @@ public class Shooter extends SubsystemBase {
         
     }
 
-    if (Timer.getFPGATimestamp() < spindexerPulseUntilSeconds) {
-     setSpindexerManualVoltages();
-    }
-    if (spindexerManualEnabled) {
-      setSpindexerManualVoltages();
+
+
+    // Intake owns the whaletail output; manual feed commands apply in other states.
+    if (currentState != CurrentState.INTAKING) {
+      if (Timer.getFPGATimestamp() < spindexerPulseUntilSeconds) {
+        setSpindexerManualVoltages();
+      }
+      if (spindexerManualEnabled) {
+        setSpindexerManualVoltages();
+      }
     }
   }
 
-  public void whaletail(double voltage) {
-    spindexerSpinnerMotor.setVoltage(-4);
-    spindexerWheelMotor.setVoltage(10);
+  /** Runs the whaletail for normal or reverse intake, with the flywheel and feed wheel off. */
+  public void setIntaking() {
+    wantedState = WantedState.INTAKING;
+    targetRPS = 0.0;
+    spindexerManualEnabled = false;
+    spindexerManualReverse = false;
+    spindexerPulseUntilSeconds = 0.0;
   }
 
 

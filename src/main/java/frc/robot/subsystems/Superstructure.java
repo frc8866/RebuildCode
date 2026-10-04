@@ -5,8 +5,11 @@ import org.littletonrobotics.junction.AutoLog;
 import org.littletonrobotics.junction.Logger;
 
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.util.Units;
@@ -99,7 +102,23 @@ public class Superstructure extends SubsystemBase{
     private static final double kMovingShotMinLeadTimeSeconds = 0.05;
     private static final double kMovingShotMaxLeadTimeSeconds = 0.35;
     private static final double kMovingShotFallbackHorizontalMps = 8.0;
-    private static final double kShootOnMoveLockedSpeedMps = 0.25; // can be changed based on chassis speeds
+
+   // tune for varible speed sotm
+
+
+    private static final double kShootOnMoveLockedSpeedMps = 0.2; // can be changed based on chassis speeds
+    
+    // Initial distance-based limits; tune with moving-shot accuracy on the robot.
+    private static final double kShootOnMoveNearDistanceMeters = 1; //should be tuned
+    private static final double kShootOnMoveFarDistanceMeters = 3.5; //should be tuned
+
+
+    private static final double kShootOnMoveNearSpeedMps = 0.2;
+    private static final double kShootOnMoveFarSpeedMps = 0.4;
+
+
+
+
     private static final double kFunnelingMinX = 5.8;
     private static final double kFunnelingMaxX = 10.5;
     private static final double kTrenchHoodDropRadiusMeters = 0.8;
@@ -114,6 +133,11 @@ public class Superstructure extends SubsystemBase{
     public boolean in = false;
     public boolean spin = false;
     private static final double kSpinReverseSeconds = 1.0;
+    // Tune this: total meters of travel per motor rotation on the intake arm
+    private static final double kIntakeMetersPerRotation = 0.03;
+    private static final double kIntakeHomeRotations = 10.5;
+    // Tune this: angle below horizontal that the intake extends at (degrees)
+    private static final double kIntakeAngleDeg = 15;
     private boolean lastSpin = false;
     private double spinReverseUntilSeconds = 0.0;
 
@@ -274,11 +298,34 @@ public class Superstructure extends SubsystemBase{
         Logger.recordOutput("MatchTime", DriverStation.getMatchTime());
         Logger.recordOutput("AutoWinner", DriverStation.getGameSpecificMessage());
         Logger.recordOutput("Battery", RobotController.getBatteryVoltage());
+        Logger.recordOutput("rotatation velocity",Math.abs(drive.getChassisSpeeds().omegaRadiansPerSecond));
+
+
+        double spindexerYawRad = -(shooter.getSpindexerPositionRotations() / 18) * 2.0 * Math.PI;
+
+        double intakeExtensionMeters =
+                Math.max(0.0, (kIntakeHomeRotations - intake.getArmPositionRotations()) * kIntakeMetersPerRotation);
+        double intakeAngleRad = Units.degreesToRadians(kIntakeAngleDeg);
+        double intakeX = intakeExtensionMeters * Math.cos(intakeAngleRad);
+        double intakeZ = -intakeExtensionMeters * Math.sin(intakeAngleRad);
+
+        double hoodPitchRad = Units.degreesToRadians(-hood.getCurrentAngleDegrees() * 6.140350877192982);
+        
+        Logger.recordOutput("ComponentPoses", new Pose3d[] {
+                    // 0: Spindexer — rotates on yaw axis
+                    new Pose3d(new Translation3d(), new Rotation3d(0.0, 0.0, spindexerYawRad)),
+                    // 1: Intake — angled extension (forward + downward)
+                    new Pose3d(new Translation3d(intakeX, 0.0, intakeZ), new Rotation3d()),
+                    // 2: Shooter — zeroed (placeholder)
+                    new Pose3d(),
+                    // 3: Dish — zeroed (placeholder)
+                    new Pose3d(),
+                    // 4: Hood — pitches based on motor position
+                    new Pose3d(new Translation3d(), new Rotation3d(0.0, hoodPitchRad, 0.0))
+        });
 
         updateInputs();
         updateDashboardControls();
-        
-
 
         Logger.processInputs("Superstructure", superstructureInputs);
         Logger.processInputs("DriveTrain", driveInputs);
@@ -487,11 +534,15 @@ public class Superstructure extends SubsystemBase{
         return currentState;
     }
 
+
+// tune this value please for the angle degrees
+
+    // regular shootcheck
     public boolean shootCheck(){
         if (shooter.isAtVelocity()
             && hood.isAtTargetAngle(hood.getTargetAngleDegrees())
             && (dashboardManual || isAimedAtHub())
-            && drive.getChassisSpeeds().omegaRadiansPerSecond < Units.degreesToRadians(5)) {
+            && Math.abs(drive.getChassisSpeeds().omegaRadiansPerSecond) < Units.degreesToRadians(10)) {
             return true;
 
         }
@@ -500,6 +551,17 @@ public class Superstructure extends SubsystemBase{
         }
         
     }
+
+
+    //shootcheck without angular velocity condition
+    // public boolean shootCheck() {
+    //     return shooter.isAtVelocity()
+    //         && hood.isAtTargetAngle(hood.getTargetAngleDegrees())
+    //         && (dashboardManual || isAimedAtHub());
+    // }   
+
+
+
 
     private void applyStates() {
         if (currentState != SuperstructureCurrentState.PRE_SHOOT) {
@@ -523,11 +585,10 @@ public class Superstructure extends SubsystemBase{
                 
                 break;
             case INTAKING:
-                shooter.setOff();
+                shooter.setIntaking();
                 hood.setIdle();
                 intake.startIntake();
                 shooter.setSpindexerManualEnabled(false);
-                shooter.whaletail(3);
                 break;
             case DASHBOARD:
                 shooter.dashboard(
@@ -549,40 +610,39 @@ public class Superstructure extends SubsystemBase{
                 break;
 
             case REVUP:
-            shooter.preShoot(16.6666666667 ,false);
-            hood.setIdle();
-         if (dashboardIntakeIn || in) {
-            intake.goHome();
-        }      
-            shooter.setSpindexerManualEnabled(false);
-            break;
+                shooter.preShoot(16.6666666667 ,false);
+                hood.setIdle();
+                if (dashboardIntakeIn || in) {
+                    intake.goHome();
+                }      
+                shooter.setSpindexerManualEnabled(false);
+                break;
 
-            case PRE_SHOOT:
-            double preShootVelocityRps = updateShotSetpointsAndGetShooterVelocityRps();
-            shooter.preShoot(preShootVelocityRps, false);
-               if (dashboardIntakeIn || in) {   
-            intake.goHome();
-        }
-            shooter.setSpindexerManualEnabled(false);
-             break;
+                case PRE_SHOOT:
+                double preShootVelocityRps = updateShotSetpointsAndGetShooterVelocityRps();
+                shooter.preShoot(preShootVelocityRps, false);
+                if (dashboardIntakeIn || in) {   
+                    intake.goHome();
+                }
+                shooter.setSpindexerManualEnabled(false);
+                break;
 
         case PASSING:
-        double passVelocityRps = updatePassSetpointsAndGetShooterVelocityRps();
+            double passVelocityRps = updatePassSetpointsAndGetShooterVelocityRps();
 
-        if (shooter.isAtVelocity() && isAimedAtHub(kAimTolerancePassingDeg)) {
-            shooter.preShoot(passVelocityRps, true);
-            intake.shoot();
-        } else {
-            shooter.preShoot(passVelocityRps, false);
-        }
+            if (shooter.isAtVelocity() && isAimedAtHub(kAimTolerancePassingDeg)) {
+                shooter.preShoot(passVelocityRps, true);
+                intake.shoot();
+            } else {
+                shooter.preShoot(passVelocityRps, false);
+            }
 
-        break;
+            break;
         case REVERSE_INTAKE:
-        shooter.setOff();
+        shooter.setIntaking();
         hood.setIdle();
         intake.reverse();
         shooter.setSpindexerManualOverride(false, false);
-        shooter.whaletail(3);
 
         break;
 
@@ -782,7 +842,7 @@ public class Superstructure extends SubsystemBase{
 
     private Translation2d getHubDirection() {
         Pose2d robotPose = drive.getPose();
-  Translation2d disntance = new Translation2d() ;
+        Translation2d disntance = new Translation2d() ;
         if (DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red) {
             disntance = Constants.FieldConstants.HUB_RED.toTranslation2d().minus(robotPose.getTranslation());
 
@@ -892,11 +952,8 @@ public class Superstructure extends SubsystemBase{
             Translation2d hubTarget = DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red
                 ? Constants.FieldConstants.HUB_RED.toTranslation2d()
                 : Constants.FieldConstants.HUB_BLUE.toTranslation2d();
-            target = shootOnMoveEnabled ? getLeadCompensatedHubTarget(hubTarget, 1.05) : hubTarget; 
+            target = shootOnMoveEnabled ? getLeadCompensatedHubTarget(hubTarget, 1.05) : hubTarget; // leadmultiplier needs to be tuned
         }
-
-        // leadmultiplier needs to be tuned
-
         return getRotationToPoint(target).plus(Rotation2d.fromDegrees(0));
     }
 
@@ -1133,6 +1190,56 @@ public class Superstructure extends SubsystemBase{
             fieldRelativeDriverSpeeds.omegaRadiansPerSecond);
     }
 
+    public ChassisSpeeds applyShootOnMoveDistanceSpeedLimit(ChassisSpeeds fieldRelativeDriverSpeeds) {
+        boolean enabled = isShootOnMoveSpeedLimitActive();
+        Logger.recordOutput("ShotOnMove/DistanceSpeedLimitEnabled", enabled);
+        if (!enabled) {
+            return fieldRelativeDriverSpeeds;
+        }
+
+        double distanceMeters = getHubDistanceMeters();
+        ChassisSpeeds limitedSpeeds = limitShootOnMoveSpeedForDistance(
+            fieldRelativeDriverSpeeds, distanceMeters);
+        Logger.recordOutput("ShotOnMove/SpeedLimitHubDistanceMeters", distanceMeters);
+        Logger.recordOutput("ShotOnMove/LimitedTranslationSpeedMps", Math.hypot(
+            limitedSpeeds.vxMetersPerSecond, limitedSpeeds.vyMetersPerSecond));
+        return limitedSpeeds;
+    }
+
+    public boolean isShootOnMoveSpeedLimitActive() {
+        return shootOnMoveEnabled
+            && !dashboardManual
+            && !isPassing()
+            && wantedState != SuperstructureWantedState.PASSING
+            && (wantedState == SuperstructureWantedState.SHOOTING
+                || wantedState == SuperstructureWantedState.PRE_SHOOT
+                || currentState == SuperstructureCurrentState.PRE_SHOOT
+                || currentState == SuperstructureCurrentState.SHOOTING);
+    }
+
+    static ChassisSpeeds limitShootOnMoveSpeedForDistance(
+            ChassisSpeeds driverSpeeds, double distanceMeters) {
+        double fraction = Double.isFinite(distanceMeters)
+            ? MathUtil.clamp(
+                (distanceMeters - kShootOnMoveNearDistanceMeters)
+                    / (kShootOnMoveFarDistanceMeters - kShootOnMoveNearDistanceMeters),
+                0.0, 1.0)
+            : 0.0;
+        double maxSpeedMps = MathUtil.interpolate(
+            kShootOnMoveNearSpeedMps, kShootOnMoveFarSpeedMps, fraction);
+        double requestedSpeedMps = Math.hypot(
+            driverSpeeds.vxMetersPerSecond, driverSpeeds.vyMetersPerSecond);
+        if (requestedSpeedMps <= maxSpeedMps) {
+            return driverSpeeds;
+        }
+
+        double scale = maxSpeedMps / requestedSpeedMps;
+        return new ChassisSpeeds(
+            driverSpeeds.vxMetersPerSecond * scale,
+            driverSpeeds.vyMetersPerSecond * scale,
+            driverSpeeds.omegaRadiansPerSecond);
+    }
+
     public ChassisSpeeds applyIntakeAssist(
         ChassisSpeeds fieldRelativeDriverSpeeds,
         double visionLateralErrorMeters,
@@ -1259,4 +1366,3 @@ public class Superstructure extends SubsystemBase{
     }
 
     }    
-    

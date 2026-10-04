@@ -8,6 +8,7 @@ import static edu.wpi.first.units.Units.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
 import com.ctre.phoenix6.hardware.TalonFX;
@@ -22,6 +23,7 @@ import com.pathplanner.lib.util.PathPlannerLogging;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
@@ -46,6 +48,7 @@ import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.Hood.Hood;
 import frc.robot.subsystems.Intake.Intake;
 import frc.robot.subsystems.Shooter.Shooter;
+import frc.robot.subsystems.Superstructure.SuperstructureCurrentState;
 import frc.robot.subsystems.Superstructure;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIOPhotonVision;
@@ -58,13 +61,15 @@ import frc.robot.util.FuelSim;
 
 public class RobotContainer {
     private static final double kMotorTooHotThresholdC = 54.4444444444;
+    private static final double kDriveDeadband = 0.2;
     private double MaxSpeed = 1.0 * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
     private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
 
 
     /* Setting up bindings for necessary control of the swerve drive platform */
     private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
-            .withDeadband(MaxSpeed * 0.2).withRotationalDeadband(MaxAngularRate * 0.2) // Add a 10% deadband
+            .withDeadband(MaxSpeed * kDriveDeadband)
+            .withRotationalDeadband(MaxAngularRate * kDriveDeadband)
             .withDriveRequestType(DriveRequestType.OpenLoopVoltage); // Use open-loop control for drive motors
     private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
     private final SwerveRequest.PointWheelsAt point = new SwerveRequest.PointWheelsAt();
@@ -85,7 +90,7 @@ public class RobotContainer {
     public final Shooter shooter = new Shooter();
     public final Hood hood = new Hood();
     public final Intake intake = new Intake();
-    public final LED led = new LED();
+    public final LED led = new LED(intake);
     public final Superstructure superstructure = new Superstructure(drivetrain, shooter, hood, intake);
     private static final String kShooterCameraName = "shooter";
     private static final String kLeftCameraName = "left";
@@ -117,19 +122,24 @@ public class RobotContainer {
     );
 
 
-    private final Transform3d robotToShooterCam = new Transform3d(
+    private final Transform3d robotToShooterCam = new Transform3d( // luma
         new Translation3d(Units.inchesToMeters(2), Units.inchesToMeters(0.003), Units.inchesToMeters(17)),
         new Rotation3d(0.0, Math.toRadians(-15), Math.toRadians(180)));
 
-    private final Transform3d robotToLeftCam = new Transform3d(
-        new Translation3d(Units.inchesToMeters(-13), Units.inchesToMeters(0), Units.inchesToMeters(20)),
-        new Rotation3d(0.0, Math.toRadians(10), Math.toRadians(38)));
+    private final Transform3d robotToLeftCam = new Transform3d( // opposite snakeskin
+        new Translation3d(Units.inchesToMeters(-12.675550), Units.inchesToMeters(-11.210814), Units.inchesToMeters(20.874904)),
+        new Rotation3d(Math.toRadians(121.267527578), Math.toRadians(331.761804914-12), Math.toRadians(228.509579)));
 
-    private final Transform3d robotToRightCam = new Transform3d(
-        new Translation3d(Units.inchesToMeters(10), Units.inchesToMeters(0), Units.inchesToMeters(20)),
-        new Rotation3d(0.0, Math.toRadians(10), Math.toRadians(-39)));
+    private final Transform3d robotToRightCam = new Transform3d( //snakeskin
+        new Translation3d(Units.inchesToMeters(12.675550), Units.inchesToMeters(-11.210814), Units.inchesToMeters(20.874904)),
+        new Rotation3d(Math.toRadians(121.267527578), Math.toRadians(331.761804914-12), Math.toRadians(131.490421)));
 
-    // only luma
+    Pose3d ShooterCamPose = new Pose3d().transformBy(robotToShooterCam); // luma
+    Pose3d LeftCamPose = new Pose3d().transformBy(robotToLeftCam); // opposite snakeskin
+    Pose3d RigthCamPose = new Pose3d().transformBy(robotToRightCam); //snakeskin
+
+
+        // only luma
     public final Vision vision = new Vision(
         drivetrain::addVisionMeasurement,
         cameraIndex -> {
@@ -144,7 +154,7 @@ public class RobotContainer {
         },
         new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam));
 
-        // with orange pi
+        // luma & orange pi
     // public final Vision vision = new Vision(
     //     drivetrain::addVisionMeasurement,
     //     cameraIndex -> {
@@ -157,13 +167,12 @@ public class RobotContainer {
     //         }
     //         return true; // teleop: all cameras accepted
     //     },
-    //     new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam), 
-    //     new VisionIOPhotonVision(kLeftCameraName, robotToLeftCam),  
-    //     new VisionIOPhotonVision(kRightCameraName, robotToRightCam));
+    //     new VisionIOPhotonVision(kShooterCameraName, robotToShooterCam), // Camera0
+    //     new VisionIOPhotonVision(kLeftCameraName, robotToLeftCam), // Camera1
+    //     new VisionIOPhotonVision(kRightCameraName, robotToRightCam)); // Camera2
         
     
-    // only orange pi
-
+        // only orange pi
     // public final Vision vision = new Vision(
     //     drivetrain::addVisionMeasurement,
     //     cameraIndex -> {
@@ -178,15 +187,46 @@ public class RobotContainer {
     //     }, 
     //     new VisionIOPhotonVision(kLeftCameraName, robotToLeftCam),  
     //     new VisionIOPhotonVision(kRightCameraName, robotToRightCam));
+
+
     /* Path follower */
     private final LoggedDashboardChooser<Command> autoChooser;
 
     private record MonitoredMotor(String name, TalonFX motor) {}
 
     public RobotContainer() {
+        Logger.recordOutput("Opposite SnakeSkin Left Cam Pose", LeftCamPose);
+        Logger.recordOutput("SnakeSkin Right Cam Pose", RigthCamPose);
+        Logger.recordOutput("Shooter Cam Pose", ShooterCamPose);
+
+        // NamedCommands.registerCommand("secondshoot",
+        //     Commands.deadline(
+        //         Commands.waitSeconds(5).andThen(Commands.runOnce(() -> {
+        //             if (DriverStation.isAutonomous() && autoIsTier2) {
+        //                 drivetrain.resetPose(vision.getLatestAcceptedPose().orElse(drivetrain.getPose()));
+        //             }
+        //         })).andThen(superstructure.setDriving()),
+        //         Commands.sequence(
+        //             superstructure.setIntake(),
+        //             Commands.waitSeconds(0.2),
+        //             superstructure.setShooting(),
+        //             Commands.defer(
+        //                 () -> drivetrain.aimAt(
+        //                     () -> {
+        //                         boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
+        //                         double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
+        //                         return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
+        //                     },
+        //                     () -> 0.0,
+        //                     () -> 0.0)
+        //                     .repeatedly().withTimeout(2),
+        //                 java.util.Set.of(drivetrain)),
+        //             superstructure.goIn(true)),
+        //         Commands.waitSeconds(1).andThen(superstructure.setForceShoot(false))));
+
         NamedCommands.registerCommand("shoot",
             Commands.deadline(
-                Commands.waitSeconds(4).andThen(Commands.runOnce(() -> {
+                Commands.waitSeconds(7).andThen(Commands.runOnce(() -> {
                     if (DriverStation.isAutonomous() && autoIsTier2) {
                         drivetrain.resetPose(vision.getLatestAcceptedPose().orElse(drivetrain.getPose()));
                     }
@@ -206,8 +246,10 @@ public class RobotContainer {
                             () -> 0.0)
                             .repeatedly().withTimeout(2),
                         java.util.Set.of(drivetrain)),
-                    superstructure.goIn(true)),
-                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(true))));
+                    superstructure.goIn(false)),
+                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(false))));
+
+                
         NamedCommands.registerCommand("accshoot", Commands.sequence(superstructure.setShooting(), Commands.waitSeconds(5)));
         NamedCommands.registerCommand("intake", superstructure.setIntake());
         NamedCommands.registerCommand("drive",
@@ -238,11 +280,8 @@ public class RobotContainer {
         // Note that X is defined as forward according to WPILib convention,
         // and Y is defined as to the left according to WPILib convention.
         
-        
-        // come back here if doesnt work
-        
-        
-        drivetrain.setDefaultCommand(
+        //regular drive
+         drivetrain.setDefaultCommand(
             // Drivetrain will execute this command periodically
             drivetrain.applyRequest(() ->
                 drive.withVelocityX(-joystick.getLeftY() * MaxSpeed) // Drive forward with negative Y (forward)
@@ -250,21 +289,21 @@ public class RobotContainer {
                     .withRotationalRate(-joystick.getRightX() * MaxAngularRate) // Drive counterclockwise with negative X (left)
             )
         );
-
-        // Try this next
+        
+        // uhhhh idt this works yet
         // drivetrain.setDefaultCommand(
         //     drivetrain.applyRequest(() -> {
-        //     ChassisSpeeds speeds = new ChassisSpeeds(
-        //         -joystick.getLeftY() * MaxSpeed,
-        //         -joystick.getLeftX() * MaxSpeed,
-        //         -joystick.getRightX() * MaxAngularRate
-        //     );
+        //         ChassisSpeeds speeds = new ChassisSpeeds(
+        //             -joystick.getLeftY() * MaxSpeed,
+        //             -joystick.getLeftX() * MaxSpeed,
+        //             -joystick.getRightX() * MaxAngularRate
+        //         );
 
-        //     speeds = superstructure.applyShootOnMoveSpeedLock(speeds);
+        //         speeds = superstructure.applyShootOnMoveSpeedLock(speeds);
 
-        //     return drive.pppppppppppppwithVelocityX(speeds.vxMetersPerSecond)
-        //         .withVelocityY(speeds.vyMetersPerSecond)
-        //         .withRotationalRate(speeds.omegaRadiansPerSecond);
+        //         return drive.withVelocityX(speeds.vxMetersPerSecond)
+        //             .withVelocityY(speeds.vyMetersPerSecond)
+        //             .withRotationalRate(speeds.omegaRadiansPerSecond);
         //     })
         // );
 
@@ -308,28 +347,41 @@ public class RobotContainer {
 
         joystick.x().onTrue(Commands.runOnce(() -> autoRotateFlip = !autoRotateFlip));
 
- 
-        joystick.rightTrigger().and(joystick.leftTrigger().negate()).and(new Trigger(superstructure::isManual).negate())
-            .whileTrue(drivetrain.aimAtWithXLock(
-                () -> {
-                    boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
-                    double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
-                    return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
-                },
-                () -> -MathUtil.clamp(joystick.getLeftY() * 10, -1, 1) * 0.25, //0.4
-                () -> -MathUtil.clamp(joystick.getLeftX() * 10, -1, 1) * 0.25, //0.4
-                () -> false)); 
-                // to do need to test
+            // varible speeds sotm- TODO need to test
+        // joystick.rightTrigger().and(joystick.leftTrigger().negate()).and(new Trigger(superstructure::isManual).negate())
+        //     .whileTrue(drivetrain.aimAtWithXLock(
+        //         () -> {
+        //             boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
+        //             double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
+        //             return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
+        //         },
+        //         this::getShootingDriveSpeeds,
+        //         () -> false));
+                //!superstructure.isPassing() to turn sotm off
 
-                //!superstructure.isPassing()
-
+            //shuttling only, sotm off
+            joystick.rightTrigger().and(joystick.leftTrigger().negate()).and(new Trigger(superstructure::isManual).negate())
+                .whileTrue(drivetrain.aimAtWithXLock(
+                    () -> {
+                        boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
+                        double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
+                        return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
+                    },
+                    () -> -MathUtil.clamp(joystick.getLeftY() * 10, -1, 1) * 0.4, //0.4 is the max with optimizations
+                    () -> -MathUtil.clamp(joystick.getLeftX() * 10, -1, 1) * 0.4, //0.4 is the max with optimizations
+                    () -> !superstructure.isPassing()));
+                //false to turn sotm on
 
         joystick.rightTrigger().and(joystick.leftTrigger().negate()).onTrue(
                 Commands.either(superstructure.setPassing(), superstructure.setShooting(), superstructure::isPassing))
             .onFalse(superstructure.setDriving());
 
-        joystick.leftTrigger().and(joystick.rightTrigger().negate()).onTrue(superstructure.setIntake())
+        // Keep intaking (including reverse spindexer) until another action changes the state.
+        //joystick.leftTrigger().and(joystick.rightTrigger().negate()).onTrue(superstructure.setIntake());
+
+           joystick.leftTrigger().and(joystick.rightTrigger().negate()).onTrue(superstructure.setIntake())
             .onFalse(superstructure.setDriving());
+
 
         joystick.leftTrigger().and(joystick.rightTrigger())
             .onTrue(superstructure.setIntakeHold())
@@ -421,6 +473,24 @@ public class RobotContainer {
         motorHealthTable.getEntry("OverallStatus").setString(overallStatus);
         motorHealthTable.getEntry("TooHotThresholdC").setDouble(kMotorTooHotThresholdC);
     }
+
+    // private ChassisSpeeds getShootingDriveSpeeds() {
+    //     ChassisSpeeds requestedSpeeds;
+    //     if (superstructure.isShootOnMoveSpeedLimitActive()) {
+    //         requestedSpeeds = new ChassisSpeeds(
+    //             -MathUtil.applyDeadband(joystick.getLeftY(), 0.2) * MaxSpeed,
+    //             -MathUtil.applyDeadband(joystick.getLeftX(), 0.2) * MaxSpeed,
+    //             0.0);
+    //     } else {
+    //         // Retain the existing fixed-speed controls and deadband outside moving hub shots.
+    //         double vx = -MathUtil.clamp(joystick.getLeftY() * 10, -1, 1) * 0.2;
+    //         double vy = -MathUtil.clamp(joystick.getLeftX() * 10, -1, 1) * 0.2;
+    //         requestedSpeeds = Math.hypot(vx, vy) < 0.2
+    //             ? new ChassisSpeeds()
+    //             : new ChassisSpeeds(vx, vy, 0.0);
+    //     }
+    //     return superstructure.applyShootOnMoveDistanceSpeedLimit(requestedSpeeds);
+    // }
 
     private static final double kPassingMaxSpeed = 0.1; // m/s — total vector magnitude cap while passing
 

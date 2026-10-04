@@ -16,6 +16,7 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.subsystems.Superstructure;
+import frc.robot.subsystems.Intake.Intake;
 import frc.robot.subsystems.Superstructure.SuperstructureCurrentState;
 
 public class LED extends SubsystemBase {
@@ -23,12 +24,13 @@ public class LED extends SubsystemBase {
     // CANdles
     private final CANdle candle1;
     //private final CANdle candle2;
+    private Intake intake;
 
     // LED counts
     private static final int CANDLE1_LED_COUNT = 30;
     private static final int CANDLE2_LED_COUNT = 74;
 
-    // Animations for candle 1
+    // Animations for candle
     private final LarsonAnimation larsonAnimation1 =
             new LarsonAnimation(0, CANDLE1_LED_COUNT);
 
@@ -47,32 +49,15 @@ public class LED extends SubsystemBase {
     private final ColorFlowAnimation colorFlowAnimation1 =
             new ColorFlowAnimation(0, CANDLE1_LED_COUNT);
 
-    // Animations for candle 2
-    private final LarsonAnimation larsonAnimation2 =
-            new LarsonAnimation(0, CANDLE2_LED_COUNT);
+    public LED(Intake intake) {
 
-    private final RgbFadeAnimation rgbFadeAnimation2 =
-            new RgbFadeAnimation(0, CANDLE2_LED_COUNT);
+        this.intake = intake;
 
-    private final RainbowAnimation rainbowAnimation2 =
-            new RainbowAnimation(0, CANDLE2_LED_COUNT);
-
-    private final FireAnimation fireAnimation2 =
-            new FireAnimation(0, CANDLE2_LED_COUNT);
-
-    private final TwinkleAnimation twinkleAnimation2 =
-            new TwinkleAnimation(0, CANDLE2_LED_COUNT);
-
-    private final ColorFlowAnimation colorFlowAnimation2 =
-            new ColorFlowAnimation(0, CANDLE2_LED_COUNT);
-
-    public LED() {
-
-        // CHANGE IDS TO YOUR ACTUAL CAN IDS
         candle1 = new CANdle(35, CANBus.roboRIO());
-        //candle2 = new CANdle(1, CANBus.roboRIO());
-
         applyConfigs(candle1);
+
+
+        //candle2 = new CANdle(1, CANBus.roboRIO());
         //applyConfigs(candle2);
     }
 
@@ -93,9 +78,8 @@ public class LED extends SubsystemBase {
         }
     }
 
-    private void animate(ControlRequest anim1, ControlRequest anim2) {
+    private void animate(ControlRequest anim1) {
         candle1.setControl(anim1);
-       // candle2.setControl(anim2);
     }
 
     @Override
@@ -103,27 +87,25 @@ public class LED extends SubsystemBase {
 
         if (!DriverStation.isEnabled()) {
 
-            animate(rgbFadeAnimation1, rgbFadeAnimation2);
+            animate(rgbFadeAnimation1);
 
         } else {
-
-            SuperstructureCurrentState currentState =
-                    Superstructure.getCurrentState();
+            Intake.CurrentState intakecurrentState = intake.getIntakeCurrentState();
+            SuperstructureCurrentState currentState = Superstructure.getCurrentState();
 
             if (currentState == SuperstructureCurrentState.SHOOTING 
                 || currentState == SuperstructureCurrentState.PRE_SHOOT
                 || currentState == SuperstructureCurrentState.REVUP) {
 
-                animate(rainbowAnimation1, rainbowAnimation2);
+                animate(rainbowAnimation1);
 
-            } else if (currentState == SuperstructureCurrentState.INTAKING) {
+            } else if (intakecurrentState == Intake.CurrentState.INTAKE) {
 
-                animate(fireAnimation1, fireAnimation2);
+                animate(fireAnimation1);
 
             } else {
 
-                animate(colorFlowAnimation1, larsonAnimation2);
-                //try colorFlowAnimation1
+                animate(colorFlowAnimation1);
             }
         }
     }

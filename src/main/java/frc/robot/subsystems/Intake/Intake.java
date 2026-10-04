@@ -86,7 +86,7 @@ public class Intake extends SubsystemBase{
     private static final double kShootPositionRotations = 12;
     //12.24697265625
      // all the way in (same as HOME)
-    private static final double kMaxShootPidVoltage = 1;
+    private static final double kMaxShootPidVoltage = 0.7;
 
     private static final double kIntakeGearRatio = 10.0;
     private static final double kIntakeDrumRadiusMeters = 0.02;
@@ -140,6 +140,10 @@ public class Intake extends SubsystemBase{
     public WantedState wantedState = WantedState.IDLE;
     public CurrentState currentState = CurrentState.IDLE;
     private CurrentState lastState = CurrentState.IDLE;
+
+    public CurrentState getIntakeCurrentState() {
+        return currentState;
+    }
 
     public Intake() {
 
@@ -393,6 +397,11 @@ public class Intake extends SubsystemBase{
     /** Stop all intake activity and hold position. */
     public void stop() {
         wantedState = WantedState.IDLE;
+    }
+    
+    /** Returns the arm motor position in rotations (0 = fully out, 10.5 = fully in). */
+    public double getArmPositionRotations() {
+        return inputs.intakeMotorPosition;
     }
 
 

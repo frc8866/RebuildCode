@@ -212,6 +212,14 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         configureAutoBuilder();
     }
 
+    private void configureAimRequestnewRequest() {
+        configureAimRequestnewRequest(m_aimRequest);
+    }
+
+    private void configureAimRequestnewRequest(SwerveRequest.FieldCentricFacingAngle request) {
+        request.HeadingController.setPID(5, 0, 0.1);
+        request.HeadingController.enableContinuousInput(-Math.PI, Math.PI);
+    }
     private void configureAimRequest() {
         m_aimRequest.HeadingController.setPID(5, 0, 0.1);
         m_aimRequest.HeadingController.enableContinuousInput(-Math.PI, Math.PI);
@@ -261,6 +269,22 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
                     .withTargetDirection(targetSupplier.get())
                     .withVelocityX(vx)
                     .withVelocityY(vy);
+        }).withName("AimAtWithXLock");
+    }
+
+    // /** Aims using a translation supplier that already applies its joystick deadband and speed limit. */
+    public Command aimAtWithXLock(Supplier<Rotation2d> targetSupplier,
+            Supplier<ChassisSpeeds> velocitySupplier, BooleanSupplier enableXLock) {
+        var request = new SwerveRequest.FieldCentricFacingAngle()
+            .withDeadband(0.0).withRotationalDeadband(0.0);
+        configureAimRequestnewRequest(request);
+        return applyRequest(() -> {
+            ChassisSpeeds speeds = enableXLock.getAsBoolean()
+                ? new ChassisSpeeds() : velocitySupplier.get();
+            return request
+                .withTargetDirection(targetSupplier.get())
+                .withVelocityX(speeds.vxMetersPerSecond)
+                .withVelocityY(speeds.vyMetersPerSecond);
         }).withName("AimAtWithXLock");
     }
 
