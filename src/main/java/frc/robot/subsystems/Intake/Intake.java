@@ -76,7 +76,7 @@ public class Intake extends SubsystemBase{
     private static final double kIntakePositionRotations = 0.0; // all the way out (encoder zero)
     private static final double kIntakeHALFPositionRotations = kIntakePositionRotations/2;
     private static final double kHomePositionRotations = 10.5; // all the way in
-    private static final double kIntakeVoltage = 6;
+    private static final double kIntakeVoltage = 5;
     private static final double kHomingVoltage = -3;
     private static final double kPositionToleranceRotations = 1.0;
     private static final double kIntakeP = 0.8;
