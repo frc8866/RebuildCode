@@ -147,7 +147,20 @@
     }
   ],
   "pointTowardsZones": [],
-  "eventMarkers": [],
+  "eventMarkers": [
+    {
+      "name": "intake",
+      "waypointRelativePos": 2.2500000000000004,
+      "endWaypointRelativePos": 3.2836134453781503,
+      "command": null
+    },
+    {
+      "name": "drive",
+      "waypointRelativePos": 3.376050420168068,
+      "endWaypointRelativePos": null,
+      "command": null
+    }
+  ],
   "globalConstraints": {
     "maxVelocity": 5.0,
     "maxAcceleration": 6.0,
