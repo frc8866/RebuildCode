@@ -1,0 +1,31 @@
+{
+  "version": "2025.0",
+  "command": {
+    "type": "sequential",
+    "data": {
+      "commands": [
+        {
+          "type": "path",
+          "data": {
+            "pathName": "auto depot by abi pt 1"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "longerShoot"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "awesome auto depot p2"
+          }
+        }
+      ]
+    }
+  },
+  "resetOdom": true,
+  "folder": "Comp Auto",
+  "choreoAuto": false
+}
