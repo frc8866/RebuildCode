@@ -86,19 +86,21 @@ public class Intake extends SubsystemBase{
     private static final double kShootPositionRotations = 12;
     //12.24697265625
      // all the way in (same as HOME)
-    private static final double kMaxShootPidVoltage = 0.7;
+    private static final double kMaxShootPidVoltage = 2;
 
     private static final double kIntakeGearRatio = 10.0;
     private static final double kIntakeDrumRadiusMeters = 0.02;
     private static final double kIntakeMassKg = 2.0;
     private static final double kIntakeMetersPerRotation =
         (2.0 * Math.PI * kIntakeDrumRadiusMeters) / kIntakeGearRatio;
-    private static final double kIntakeMaxMeters = kIntakePositionRotations * kIntakeMetersPerRotation;
+    private static final double kIntakeMaxMeters =
+        Math.max(kHomePositionRotations, kShootPositionRotations) * kIntakeMetersPerRotation;
     private static final double kRadiansPerRotation = 2.0 * Math.PI;
     private Timer shootTimer = new Timer();
 
 
     private TalonFXSimState intakeMotorSim;
+    private TalonFXSimState intakeMotorFollowerSim;
     private TalonFXSimState intakeWheelsSim;
     private ElevatorSim intakeElevatorSim;
     private DCMotorSim intakeWheelsMotorSim;
@@ -107,7 +109,7 @@ public class Intake extends SubsystemBase{
     private final PIDController intakePid =
         new PIDController(kIntakeP, kIntakeI, kIntakeD); 
           private final PIDController intakePid1 =
-        new PIDController(0.09, kIntakeI, kIntakeD);
+        new PIDController(0.2, kIntakeI, kIntakeD);
 
     // Follower motor PID (uses intakeMotorFollower encoder independently)
     // Since the follower is physically opposed, its encoder reads in the opposite
@@ -115,7 +117,7 @@ public class Intake extends SubsystemBase{
     private final PIDController intakeFollowerPid =
         new PIDController(kIntakeP, kIntakeI, kIntakeD);
                  private final PIDController intakePidfollower1 =
-        new PIDController(0.09, kIntakeI, kIntakeD);
+        new PIDController(0.2, kIntakeI, kIntakeD);
 
     private Follower wheels_follower = new Follower(intakeWheels.getDeviceID(), MotorAlignmentValue.Opposed);
 
@@ -160,6 +162,7 @@ public class Intake extends SubsystemBase{
 
         if (RobotBase.isSimulation()) {
             intakeMotorSim = intakeMotor.getSimState();
+            intakeMotorFollowerSim = intakeMotorFollower.getSimState();
             intakeWheelsSim = intakeWheels.getSimState();
             intakeElevatorSim =
                 new ElevatorSim(
@@ -218,6 +221,11 @@ public class Intake extends SubsystemBase{
         intakeMotorSim.setSupplyVoltage(Volts.of(batteryVoltage));
         intakeMotorSim.setRawRotorPosition(Rotations.of(motorRotations));
         intakeMotorSim.setRotorVelocity(RotationsPerSecond.of(motorRotationsPerSec));
+
+        // Both arm motors share the mechanism, with opposite encoder directions.
+        intakeMotorFollowerSim.setSupplyVoltage(Volts.of(batteryVoltage));
+        intakeMotorFollowerSim.setRawRotorPosition(Rotations.of(-motorRotations));
+        intakeMotorFollowerSim.setRotorVelocity(RotationsPerSecond.of(-motorRotationsPerSec));
 
         intakeWheelsMotorSim.setInputVoltage(intakeWheels.getMotorVoltage().getValueAsDouble());
         intakeWheelsMotorSim.update(kSimDtSeconds);

@@ -199,32 +199,33 @@ public class RobotContainer {
         Logger.recordOutput("SnakeSkin Right Cam Pose", RigthCamPose);
         Logger.recordOutput("Shooter Cam Pose", ShooterCamPose);
 
-        // NamedCommands.registerCommand("secondshoot",
-        //     Commands.deadline(
-        //         Commands.waitSeconds(5).andThen(Commands.runOnce(() -> {
-        //             if (DriverStation.isAutonomous() && autoIsTier2) {
-        //                 drivetrain.resetPose(vision.getLatestAcceptedPose().orElse(drivetrain.getPose()));
-        //             }
-        //         })).andThen(superstructure.setDriving()),
-        //         Commands.sequence(
-        //             superstructure.setIntake(),
-        //             Commands.waitSeconds(0.2),
-        //             superstructure.setShooting(),
-        //             Commands.defer(
-        //                 () -> drivetrain.aimAt(
-        //                     () -> {
-        //                         boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
-        //                         double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
-        //                         return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
-        //                     },
-        //                     () -> 0.0,
-        //                     () -> 0.0)
-        //                     .repeatedly().withTimeout(2),
-        //                 java.util.Set.of(drivetrain)),
-        //             superstructure.goIn(true)),
-        //         Commands.waitSeconds(1).andThen(superstructure.setForceShoot(false))));
-
         NamedCommands.registerCommand("shoot",
+            Commands.deadline(
+                Commands.waitSeconds(3.5).andThen(Commands.runOnce(() -> {
+                    if (DriverStation.isAutonomous() && autoIsTier2) {
+                        drivetrain.resetPose(vision.getLatestAcceptedPose().orElse(drivetrain.getPose()));
+                    }
+                })).andThen(superstructure.setDriving()),
+                Commands.sequence(
+                    superstructure.setIntake(),
+                    Commands.waitSeconds(0.2),
+                    superstructure.setSlowIntakeIn(),
+                    superstructure.setShooting(),
+                    Commands.defer(
+                        () -> drivetrain.aimAt(
+                            () -> {
+                                boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
+                                double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
+                                return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
+                            },
+                            () -> 0.0,
+                            () -> 0.0)
+                            .repeatedly().withTimeout(2),
+                        java.util.Set.of(drivetrain)),
+                    superstructure.goIn(false)),
+                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(false))));
+
+        NamedCommands.registerCommand("longerShoot",
             Commands.deadline(
                 Commands.waitSeconds(7).andThen(Commands.runOnce(() -> {
                     if (DriverStation.isAutonomous() && autoIsTier2) {
@@ -234,6 +235,33 @@ public class RobotContainer {
                 Commands.sequence(
                     superstructure.setIntake(),
                     Commands.waitSeconds(0.2),
+                    superstructure.setSlowIntakeIn(),
+                    superstructure.setShooting(),
+                    Commands.defer(
+                        () -> drivetrain.aimAt(
+                            () -> {
+                                boolean isBlue = DriverStation.getAlliance().orElse(DriverStation.Alliance.Blue) == DriverStation.Alliance.Blue;
+                                double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
+                                return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
+                            },
+                            () -> 0.0,
+                            () -> 0.0)
+                            .repeatedly().withTimeout(2),
+                        java.util.Set.of(drivetrain)),
+                    superstructure.goIn(false)),
+                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(false))));
+
+         NamedCommands.registerCommand("longestShoot",
+            Commands.deadline(
+                Commands.waitSeconds(9).andThen(Commands.runOnce(() -> {
+                    if (DriverStation.isAutonomous() && autoIsTier2) {
+                        drivetrain.resetPose(vision.getLatestAcceptedPose().orElse(drivetrain.getPose()));
+                    }
+                })).andThen(superstructure.setDriving()),
+                Commands.sequence(
+                    superstructure.setIntake(),
+                    Commands.waitSeconds(0.2),
+                    superstructure.setSlowIntakeIn(),
                     superstructure.setShooting(),
                     Commands.defer(
                         () -> drivetrain.aimAt(
@@ -251,6 +279,8 @@ public class RobotContainer {
 
                 
         NamedCommands.registerCommand("accshoot", Commands.sequence(superstructure.setShooting(), Commands.waitSeconds(5)));
+
+
         NamedCommands.registerCommand("intake", superstructure.setIntake());
         NamedCommands.registerCommand("drive",
             Commands.sequence(superstructure.setDriving(), superstructure.goIn(true)));
@@ -316,9 +346,10 @@ public class RobotContainer {
         );
 
         joystick.a().whileTrue(drivetrain.applyRequest(() -> brake));
-        joystick.b().whileTrue(drivetrain.applyRequest(() ->
-            point.withModuleDirection(new Rotation2d(-joystick.getLeftY(), -joystick.getLeftX()))
-        ));
+        // joystick.b().whileTrue(drivetrain.applyRequest(() ->
+        //     point.withModuleDirection(new Rotation2d(-joystick.getLeftY(), -joystick.getLeftX()))
+        // ));
+        joystick.b().onTrue(superstructure.setSlowIntakeIn()).onFalse(superstructure.setDriving());
 
         joystick.povUp().whileTrue(drivetrain.applyRequest(() ->
             forwardStraight.withVelocityX(0.5).withVelocityY(0))
@@ -342,7 +373,7 @@ public class RobotContainer {
         // joystick.start().and(joystick.y()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kForward));
         // joystick.start().and(joystick.x()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
 
-        // Reset the field-centric heading on left bumper press.
+        // Reset the field-centric heading on a press.
         joystick.a().onTrue(drivetrain.runOnce(drivetrain::seedFieldCentric));
 
         joystick.x().onTrue(Commands.runOnce(() -> autoRotateFlip = !autoRotateFlip));
@@ -367,8 +398,8 @@ public class RobotContainer {
                         double deg = (isBlue ? 180 : 0) + (autoRotateFlip ? 180 : 0);
                         return superstructure.getHubHeading().plus(Rotation2d.fromDegrees(deg));
                     },
-                    () -> -MathUtil.clamp(joystick.getLeftY() * 10, -1, 1) * 0.4, //0.4 is the max with optimizations
-                    () -> -MathUtil.clamp(joystick.getLeftX() * 10, -1, 1) * 0.4, //0.4 is the max with optimizations
+                    () -> -MathUtil.clamp(joystick.getLeftY() * 10, -1, 1) * 0.2, //0.4 is the max with optimizations
+                    () -> -MathUtil.clamp(joystick.getLeftX() * 10, -1, 1) * 0.2, //0.4 is the max with optimizations
                     () -> !superstructure.isPassing()));
                 //false to turn sotm on
 
@@ -379,15 +410,25 @@ public class RobotContainer {
         // Keep intaking (including reverse spindexer) until another action changes the state.
         //joystick.leftTrigger().and(joystick.rightTrigger().negate()).onTrue(superstructure.setIntake());
 
-           joystick.leftTrigger().and(joystick.rightTrigger().negate()).onTrue(superstructure.setIntake())
+        joystick.leftTrigger().and(joystick.rightTrigger().negate()).onTrue(superstructure.setIntake())
             .onFalse(superstructure.setDriving());
 
 
         joystick.leftTrigger().and(joystick.rightTrigger())
-            .onTrue(superstructure.setIntakeHold())
-            .onFalse(superstructure.setDriving());
+            .onTrue(superstructure.setJerk())
+            .onFalse(
+                Commands.either(
+                    Commands.either(
+                        superstructure.setPassing(),
+                        superstructure.setShooting(),
+                        superstructure::isPassing),
+                    Commands.either(
+                        superstructure.setIntake(),
+                        superstructure.setDriving(),
+                        () -> joystick.leftTrigger().getAsBoolean()),
+                    () -> joystick.rightTrigger().getAsBoolean()));
 
-        joystick.leftBumper().onTrue(superstructure.goIn(true)).onFalse(superstructure.goIn(false));
+        joystick.leftBumper().whileTrue(superstructure.goIn(true)).whileFalse(superstructure.goIn(false));
 
         joystick.y().onTrue(superstructure.setDriving());
 

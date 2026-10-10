@@ -52,7 +52,8 @@ public class Superstructure extends SubsystemBase{
     PRE_SHOOT,
     PASSING,
     REVERSE_INTAKE,
-    INTAKE_HOLD
+    INTAKE_HOLD,
+    JERK
 
   }
   public enum SuperstructureCurrentState {
@@ -65,7 +66,8 @@ public class Superstructure extends SubsystemBase{
     PRE_SHOOT,
     PASSING,
     REVERSE_INTAKE,
-    INTAKE_HOLD
+    INTAKE_HOLD,
+    JERK
   }
     public CommandSwerveDrivetrain drive;
     public Shooter shooter;
@@ -131,6 +133,8 @@ public class Superstructure extends SubsystemBase{
     private static final Translation2d kBluePassPoint1 = new Translation2d(2.899, 1.7);
 
     public boolean in = false;
+    // Keep the slow inward request active until intake is requested again.
+    private boolean slowIntakeIn = false;
     public boolean spin = false;
     private static final double kSpinReverseSeconds = 1.0;
     // Tune this: total meters of travel per motor rotation on the intake arm
@@ -496,6 +500,9 @@ public class Superstructure extends SubsystemBase{
             case INTAKE_HOLD:
             currentState = SuperstructureCurrentState.INTAKE_HOLD;
             break;
+            case JERK:
+                currentState = SuperstructureCurrentState.JERK;
+                break;
         }
     }
 
@@ -632,7 +639,11 @@ public class Superstructure extends SubsystemBase{
 
             if (shooter.isAtVelocity() && isAimedAtHub(kAimTolerancePassingDeg)) {
                 shooter.preShoot(passVelocityRps, true);
-                intake.shoot();
+                if (slowIntakeIn) {
+                    intake.shoot();
+                } else {
+                    intake.startIntake();
+                }
             } else {
                 shooter.preShoot(passVelocityRps, false);
             }
@@ -666,6 +677,13 @@ public class Superstructure extends SubsystemBase{
         shooter.setSpindexerManualEnabled(false);
         break;
 
+        case JERK:
+            double jerkVelocityRps = updateShotSetpointsAndGetShooterVelocityRps();
+            shooter.preShoot(jerkVelocityRps, false);
+            intake.startIntake();
+            shooter.setSpindexerManualEnabled(false);
+            break;
+
         }
 
         if (isNearTrench()) {
@@ -680,13 +698,15 @@ public class Superstructure extends SubsystemBase{
         double boostedShooterVelocity = updateShotSetpointsAndGetShooterVelocityRps();
 
         Logger.recordOutput("boosted", boostedShooterVelocity);
-        shooter.shoot(boostedShooterVelocity);
+        shooter.shoot(  boostedShooterVelocity);
 
         boolean forceIntakeHome = dashboardIntakeIn || in;
         if (forceIntakeHome) {
             intake.goHome();
-        } else {
+        } else if (slowIntakeIn) {
             intake.shoot();
+        } else {
+            intake.startIntake();
         }
 
         double now = Timer.getFPGATimestamp();
@@ -722,6 +742,10 @@ public class Superstructure extends SubsystemBase{
         wantedState = SuperstructureWantedState.REVERSE_INTAKE;
     }
 
+    public void requestJerk() {
+        wantedState = SuperstructureWantedState.JERK;
+    }
+
     public void requestShooting() {
         wantedState = SuperstructureWantedState.SHOOTING;
     }
@@ -755,9 +779,17 @@ public class Superstructure extends SubsystemBase{
             intakeIn(in);
         } );
     }
+    public Command setSlowIntakeIn() {
+        return Commands.runOnce(() -> {
+            slowIntakeIn = true;
+            intake.shoot();
+        });
+    }
+
     public Command setIntake(){
         return Commands.runOnce(() -> {
             in = false;
+            slowIntakeIn = false;
             requestIntake();
         });
     }
@@ -794,6 +826,10 @@ public class Superstructure extends SubsystemBase{
 
     public Command setReverseIntake() {
         return Commands.runOnce(this::requestReverseIntake);
+    }
+
+    public Command setJerk() {
+        return Commands.runOnce(this::requestJerk);
     }
 
     public Command setIntakeHold() {
