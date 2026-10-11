@@ -227,7 +227,7 @@ public class RobotContainer {
 
         NamedCommands.registerCommand("longerShoot",
             Commands.deadline(
-                Commands.waitSeconds(7).andThen(Commands.runOnce(() -> {
+                Commands.waitSeconds(6).andThen(Commands.runOnce(() -> {
                     if (DriverStation.isAutonomous() && autoIsTier2) {
                         drivetrain.resetPose(vision.getLatestAcceptedPose().orElse(drivetrain.getPose()));
                     }
