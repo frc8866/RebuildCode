@@ -378,6 +378,9 @@ public class RobotContainer {
 
         joystick.x().onTrue(Commands.runOnce(() -> autoRotateFlip = !autoRotateFlip));
 
+        // No drivetrain requirement: changing current limits must not interrupt driving/aiming.
+        joystick.start().onTrue(Commands.runOnce(drivetrain::toggleLowPowerMode));
+
             // varible speeds sotm- TODO need to test
         // joystick.rightTrigger().and(joystick.leftTrigger().negate()).and(new Trigger(superstructure::isManual).negate())
         //     .whileTrue(drivetrain.aimAtWithXLock(

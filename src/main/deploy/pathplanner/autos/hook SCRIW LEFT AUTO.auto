@@ -7,7 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "Intake"
+            "pathName": "hooked Intake"
           }
         },
         {
@@ -19,7 +19,7 @@
         {
           "type": "named",
           "data": {
-            "name": "longestShoot"
+            "name": "longerShoot"
           }
         },
         {

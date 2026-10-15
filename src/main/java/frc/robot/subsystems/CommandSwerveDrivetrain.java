@@ -3,12 +3,16 @@ package frc.robot.subsystems;
 import static edu.wpi.first.units.Units.*;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
 import com.ctre.phoenix6.SignalLogger;
 import com.ctre.phoenix6.Utils;
+import com.ctre.phoenix6.configs.CurrentLimitsConfigs;
+import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.swerve.SwerveDrivetrainConstants;
 import com.ctre.phoenix6.swerve.SwerveModuleConstants;
 import com.ctre.phoenix6.swerve.SwerveRequest;
@@ -29,10 +33,12 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.Notifier;
 import edu.wpi.first.wpilibj.RobotController;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 
+import frc.robot.generated.TunerConstants;
 import frc.robot.generated.TunerConstants.TunerSwerveDrivetrain;
 
 /**
@@ -46,6 +52,19 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     private static final double kSimLoopPeriod = 0.004; // 4 ms
     private Notifier m_simNotifier = null;
     private double m_lastSimTime;
+
+    private static final double kLowPowerDriveCurrentAmps = 60;
+    private static final double kLowPowerSteerCurrentAmps = 40;
+    private static final double kLowBatteryVoltage = 7.0;
+    private static final double kCurrentLimitConfigTimeoutSeconds = 0.1;
+    // Latched for this drivetrain's lifetime; only restarting the robot code resets it.
+    private boolean m_autoLowPowerTriggered = false;
+    private boolean m_lowPowerModeRequested = false;
+    // Last successfully applied mode; retain it while an update is pending or fails.
+    private boolean m_lowPowerModeEnabled = false;
+    private boolean m_powerModeChangePending = false;
+    private CompletableFuture<String> m_powerModeUpdate = null;
+    private String m_powerModeStatus = "Normal";
 
     /* Blue alliance sees forward as 0 degrees (toward red alliance wall) */
     private static final Rotation2d kBlueAlliancePerspectiveRotation = Rotation2d.kZero;
@@ -379,6 +398,85 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         return run(() -> this.setControl(request.get()));
     }
 
+    /** Requests a toggle without interrupting the active driving or aiming command. */
+    public void toggleLowPowerMode() {
+        setLowPowerMode(!m_lowPowerModeRequested);
+    }
+
+    private void setLowPowerMode(boolean enabled) {
+        m_lowPowerModeRequested = enabled;
+        m_powerModeChangePending = true;
+    }
+
+    private void checkBatteryVoltage() {
+        double batteryVoltage = RobotController.getBatteryVoltage();
+        if (batteryVoltage <= kLowBatteryVoltage && !m_autoLowPowerTriggered) {
+            m_autoLowPowerTriggered = true;
+            setLowPowerMode(true);
+        }
+        // After the first low-voltage event, only Start changes the requested power mode.
+        SmartDashboard.putNumber("Drivetrain/BatteryVoltage", batteryVoltage);
+    }
+
+    private void updatePowerMode() {
+        if (m_powerModeUpdate != null && m_powerModeUpdate.isDone()) {
+            try {
+                m_powerModeStatus = m_powerModeUpdate.join();
+                if (m_powerModeStatus.equals("Low power")) {
+                    m_lowPowerModeEnabled = true;
+                } else if (m_powerModeStatus.equals("Normal")) {
+                    m_lowPowerModeEnabled = false;
+                }
+            } catch (CompletionException ex) {
+                m_powerModeStatus = "Error (limits may be mixed)";
+                DriverStation.reportError("Drivetrain power mode update failed: " + ex.getCause(), false);
+            }
+            m_powerModeUpdate = null;
+        }
+
+        if (m_powerModeChangePending && m_powerModeUpdate == null) {
+            final boolean lowPower = m_lowPowerModeRequested;
+            m_powerModeChangePending = false;
+            m_powerModeStatus = lowPower ? "Applying low power" : "Applying normal";
+            // CTRE refresh/apply calls wait for CAN responses. Keep them off the robot loop.
+            m_powerModeUpdate = CompletableFuture.supplyAsync(() -> {
+                boolean success = applyPowerModeCurrentLimits(lowPower);
+                return success ? (lowPower ? "Low power" : "Normal") : "Error (limits may be mixed)";
+            });
+        }
+
+        SmartDashboard.putBoolean("Drivetrain/LowPowerModeRequested", m_lowPowerModeRequested);
+        SmartDashboard.putBoolean("Drivetrain/LowPowerModeEnabled", m_lowPowerModeEnabled);
+        SmartDashboard.putString("Drivetrain/PowerMode", m_powerModeStatus);
+    }
+
+    private boolean applyPowerModeCurrentLimits(boolean lowPower) {
+        double driveAmps = lowPower ? kLowPowerDriveCurrentAmps : TunerConstants.kSlipCurrent.in(Amps);
+        double steerAmps = lowPower ? kLowPowerSteerCurrentAmps : TunerConstants.kSteerStatorCurrentLimit.in(Amps);
+        boolean success = true;
+        for (var module : getModules()) {
+            // Do not short-circuit: attempt both motors on every module even after an error.
+            success &= applyStatorCurrentLimit(module.getDriveMotor(), driveAmps);
+            success &= applyStatorCurrentLimit(module.getSteerMotor(), steerAmps);
+        }
+        return success;
+    }
+
+    private boolean applyStatorCurrentLimit(TalonFX motor, double amps) {
+        var limits = new CurrentLimitsConfigs();
+        // Preserve the existing supply-current settings in this config group.
+        var status = motor.getConfigurator().refresh(limits, kCurrentLimitConfigTimeoutSeconds);
+        if (status.isOK()) {
+            limits.withStatorCurrentLimit(amps).withStatorCurrentLimitEnable(true);
+            status = motor.getConfigurator().apply(limits, kCurrentLimitConfigTimeoutSeconds);
+        }
+        if (!status.isOK()) {
+            DriverStation.reportError("Failed to set drivetrain motor " + motor.getDeviceID()
+                + " stator current limit to " + amps + " A: " + status, false);
+        }
+        return status.isOK();
+    }
+
     /**
      * Runs the SysId Quasistatic test in the given direction for the routine
      * specified by {@link #m_sysIdRoutineToApply}.
@@ -403,6 +501,8 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
 
     @Override
     public void periodic() {
+        checkBatteryVoltage();
+        updatePowerMode();
         /*
          * Periodically try to apply the operator perspective.
          * If we haven't applied the operator perspective before, then we should apply it regardless of DS state.
@@ -435,6 +535,18 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
             updateSimState(deltaTime, RobotController.getBatteryVoltage());
         });
         m_simNotifier.startPeriodic(kSimLoopPeriod);
+    }
+
+    @Override
+    public void close() {
+        // Finish any CAN configuration before the parent closes the motor controllers.
+        if (m_powerModeUpdate != null) {
+            m_powerModeUpdate.handle((result, error) -> null).join();
+        }
+        if (m_simNotifier != null) {
+            m_simNotifier.close();
+        }
+        super.close();
     }
 
     /**
