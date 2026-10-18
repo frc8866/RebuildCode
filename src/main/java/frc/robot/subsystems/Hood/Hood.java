@@ -1,6 +1,8 @@
 package frc.robot.subsystems.Hood;
 import org.littletonrobotics.junction.AutoLog;
 import org.littletonrobotics.junction.Logger;
+
+import com.ctre.phoenix6.configs.CurrentLimitsConfigs;
 import com.ctre.phoenix6.configs.MotionMagicConfigs;
 import com.ctre.phoenix6.configs.Slot0Configs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
@@ -24,7 +26,7 @@ import static edu.wpi.first.units.Units.Volts;
 public class Hood extends SubsystemBase{
     private TalonFX hoodMotor = new TalonFX(17);
     private CANcoder hoodEncoder = new CANcoder(25);
-      protected TalonFXConfiguration config = new TalonFXConfiguration();
+      protected TalonFXConfiguration config = new TalonFXConfiguration().withCurrentLimits(new CurrentLimitsConfigs().withStatorCurrentLimit(40).withSupplyCurrentLimit(20));
         private final  MotionMagicVoltage  positionOut = new MotionMagicVoltage(0);
 
 
@@ -92,6 +94,8 @@ private double jerk = 0;
       .withMotionMagicCruiseVelocity(1000)
       .withMotionMagicAcceleration(1200)
       .withMotionMagicJerk(0);
+
+
 
         config.MotorOutput.Inverted = InvertedValue.CounterClockwise_Positive;
             if (RobotBase.isSimulation()) {

@@ -55,7 +55,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
 
     private static final double kLowPowerDriveCurrentAmps = 60;
     private static final double kLowPowerSteerCurrentAmps = 40;
-    private static final double kLowBatteryVoltage = 7.0;
+    private static final double kLowBatteryVoltage = 7.5;
     private static final double kCurrentLimitConfigTimeoutSeconds = 0.1;
     // Latched for this drivetrain's lifetime; only restarting the robot code resets it.
     private boolean m_autoLowPowerTriggered = false;

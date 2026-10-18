@@ -223,7 +223,7 @@ public class RobotContainer {
                             .repeatedly().withTimeout(2),
                         java.util.Set.of(drivetrain)),
                     superstructure.goIn(false)),
-                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(false))));
+                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(true))));
 
         NamedCommands.registerCommand("longerShoot",
             Commands.deadline(
@@ -249,7 +249,7 @@ public class RobotContainer {
                             .repeatedly().withTimeout(2),
                         java.util.Set.of(drivetrain)),
                     superstructure.goIn(false)),
-                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(false))));
+                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(true))));
 
          NamedCommands.registerCommand("longestShoot",
             Commands.deadline(
@@ -275,7 +275,7 @@ public class RobotContainer {
                             .repeatedly().withTimeout(2),
                         java.util.Set.of(drivetrain)),
                     superstructure.goIn(false)),
-                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(false))));
+                Commands.waitSeconds(1).andThen(superstructure.setForceShoot(true))));
 
                 
         NamedCommands.registerCommand("accshoot", Commands.sequence(superstructure.setShooting(), Commands.waitSeconds(5)));
@@ -437,7 +437,7 @@ public class RobotContainer {
 
         joystick.rightBumper()
             .onTrue(superstructure.setReverseIntake())
-            .onFalse(superstructure.setDriving());
+            .onFalse(superstructure.setDriving().andThen(Commands.runOnce(superstructure.intake::stop)));
 
         drivetrain.registerTelemetry(logger::telemeterize);
 
